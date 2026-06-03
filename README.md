@@ -34,3 +34,32 @@ An active conversational AI tool that answers your questions, explains your posi
 
 Built on what wallets reveal, not what users say.
 On-chain behavior, protocol usage patterns, and DeFi market data — not surveys.
+
+---
+
+## Technical Overview
+
+**Stack**
+- Framework: Next.js (React)
+- Styling: Tailwind CSS
+- Deployment: Vercel
+
+**Data Sources & APIs**
+
+| API | Purpose | Cost |
+|---|---|---|
+| Helius | Solana wallet data — token balances, staking positions, transaction history | Free tier |
+| DeFiLlama | Live APY data — Jito, Marinade, native staking | Free, no key |
+| Groq | AI chat advisor — portfolio analysis, recommendations | Free tier |
+
+**Core Features & Logic**
+
+1. **Wallet Analysis** — user inputs a Solana wallet address → Helius API fetches balances, staking state, idle SOL
+2. **Idle Capital Detection** — calculates unstaked/uninvested SOL and shows yield cost of inaction
+3. **Yield Comparison Engine** — pulls live APY from DeFiLlama, compares Jito vs Marinade vs native staking
+4. **Opportunity Cost Framing** — translates APY differences into real money lost based on actual holdings
+5. **Risk Scoring** — evaluates exposure per position
+6. **Growth Potential** — projected returns based on current wallet composition
+7. **Three-Level Forecast** — conservative / moderate / aggressive scenarios
+8. **Portfolio Rebalancing** — AI-generated suggestions via Groq
+9. **AI Chat Advisor** — conversational interface powered by Groq, context-aware of the user's wallet data
