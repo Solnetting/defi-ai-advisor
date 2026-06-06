@@ -116,10 +116,10 @@ export default function ChatPanel({
   // ── Shared chip input ─────────────────────────────────────────────────────
   const chipUI = (
     <div className="px-4 py-3 shrink-0">
-      <div className={`flex items-center gap-3 border rounded-full px-4 py-2.5 transition-all ${
-        focused ? "border-purple-700" : "border-purple-700/50"
+      <div className={`flex items-center border rounded-full pl-4 pr-1.5 py-1.5 transition-all ${
+        focused ? "border-purple-700" : "border-purple-700/40"
       }`}>
-        <span className={`text-xs shrink-0 transition-colors ${focused ? "text-purple-400" : "text-gray-600"}`}>✦</span>
+        <span className={`text-xs shrink-0 mr-3 transition-colors ${focused ? "text-purple-400" : "text-purple-700"}`}>✦</span>
         <input
           type="text"
           value={input}
@@ -129,22 +129,20 @@ export default function ChatPanel({
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={placeholder}
           className={`flex-1 bg-transparent text-sm outline-none min-w-0 transition-colors ${
-            focused ? "text-white placeholder-gray-600" : "text-gray-500 placeholder-gray-600"
+            focused ? "text-white placeholder-gray-700" : "text-gray-600 placeholder-gray-700"
           }`}
         />
-        {focused ? (
+        {mode === "overlay" && hasThread && !open && !focused ? (
+          <button onClick={() => setOpen(true)} className="text-xs text-purple-500 hover:text-purple-400 transition-colors px-3 py-2">Show ↑</button>
+        ) : (
           <button
             onMouseDown={(e) => { e.preventDefault(); send(); }}
             disabled={!input.trim() || loading}
-            className="shrink-0 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-all"
+            className="shrink-0 ml-2 bg-white hover:bg-gray-100 disabled:opacity-25 text-black text-xs font-bold px-4 py-2.5 rounded-full transition-all"
           >
             {loading ? "…" : "Ask"}
           </button>
-        ) : mode === "inline" ? (
-          <button onClick={() => setOpen(false)} className="text-gray-700 hover:text-gray-500 transition-colors text-sm leading-none">×</button>
-        ) : hasThread && !open ? (
-          <button onClick={() => setOpen(true)} className="text-xs text-purple-500 hover:text-purple-400 transition-colors">Show ↑</button>
-        ) : null}
+        )}
       </div>
     </div>
   );
