@@ -393,9 +393,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
           const totalPoints = timeframe === "1Y" ? 12 : timeframe === "3Y" ? 36 : 60;
           const labelStep = timeframe === "1Y" ? 2 : timeframe === "3Y" ? 6 : 12;
-          // Show the green line only when idle SOL creates a meaningful gap (> $1 at end of timeframe)
-          const idleGapUSD = data.idleSOL * (Math.pow(1 + nativeAPY, totalPoints / 12) - 1) * data.solPrice;
-          const showOptimized = isStablePlan || (data.idleSOL > 0.01 && idleGapUSD > 1);
+          const showOptimized = isStablePlan || data.idleSOL > 0.01;
 
           // Both lines start at the SAME value today and diverge from there
           const chartData = Array.from({ length: totalPoints + 1 }, (_, m) => {
