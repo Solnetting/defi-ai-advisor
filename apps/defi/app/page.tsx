@@ -611,8 +611,6 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                                       if (isStablePlan) {
                                         label2 = sname === "optimized" ? "Deployed" : "Idle";
                                       } else if (sname === "optimized") {
-                                        const cur = payload.find((e) => e.dataKey === "current");
-                                        if (cur && Math.abs(v - Number(cur.value)) < 1) return null;
                                         label2 = "With plan";
                                         color = "#4ade80";
                                       } else if (sname === "current") {

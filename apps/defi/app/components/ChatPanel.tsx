@@ -138,7 +138,7 @@ export default function ChatPanel({
           <button
             onMouseDown={(e) => { e.preventDefault(); send(); }}
             disabled={!input.trim() || loading}
-            className="shrink-0 ml-2 bg-white hover:bg-gray-100 disabled:opacity-25 text-black text-xs font-bold px-4 py-2.5 rounded-full transition-all"
+            className="shrink-0 ml-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-25 text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all"
           >
             {loading ? "…" : "Ask"}
           </button>
