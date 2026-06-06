@@ -1,6 +1,7 @@
 {
   "name": "defi-workspace",
   "private": true,
+  "packageManager": "npm@11.9.0",
   "workspaces": [
     "apps/*",
     "packages/*"
