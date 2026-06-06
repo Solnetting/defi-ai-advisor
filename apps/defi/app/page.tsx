@@ -389,12 +389,13 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           const deployedBase = data.stakedSOL + data.kaminoSOL; // already earning
           const totalSOL = deployedBase + data.idleSOL;         // everything
           const isStablePlan = activePlan?.chartType === "stable";
-          // Show the green line whenever there is an active plan to compare against
-          const showOptimized = isStablePlan || data.idleSOL > 0.01;
           const now = new Date();
           const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
           const totalPoints = timeframe === "1Y" ? 12 : timeframe === "3Y" ? 36 : 60;
           const labelStep = timeframe === "1Y" ? 2 : timeframe === "3Y" ? 6 : 12;
+          // Show the green line only when idle SOL creates a meaningful gap (> $1 at end of timeframe)
+          const idleGapUSD = data.idleSOL * (Math.pow(1 + nativeAPY, totalPoints / 12) - 1) * data.solPrice;
+          const showOptimized = isStablePlan || (data.idleSOL > 0.01 && idleGapUSD > 1);
 
           // Both lines start at the SAME value today and diverge from there
           const chartData = Array.from({ length: totalPoints + 1 }, (_, m) => {
@@ -599,19 +600,42 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                             <YAxis yAxisId="left" hide domain={["auto", "auto"]} />
                             <Tooltip
                               cursor={{ stroke: "#2d2d2d", strokeWidth: 1, strokeDasharray: "4 2" }}
-                              contentStyle={{ background: "#0a0a0a", border: "1px solid #27272a", borderRadius: 8, fontSize: 11, padding: "8px 12px" }}
-                              labelFormatter={(m) => fmtTick(m as number)}
-                              labelStyle={{ color: "#52525b", marginBottom: 4 }}
-                              itemStyle={{ color: "#a1a1aa" }}
-                              formatter={(val, name) => {
-                                const v = Number(val); const sname = String(name);
-                                if (isStablePlan) return name === "optimized" ? [`${fmtUSD(v)} deployed`, ""] : [`${fmtUSD(v)} idle`, ""];
-                                if (sname.startsWith("s_")) {
-                                  const scenario = forecastScenarios.find((s) => s.id === sname.slice(2));
-                                  if (!scenario) return [fmtUSD(v), sname];
-                                  return [fmtUSD(v), scenario.label];
-                                }
-                                return name === "optimized" ? [fmtUSD(v), "With plan"] : [fmtUSD(v), "Current path"];
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null;
+                                return (
+                                  <div style={{ background: "#0a0a0a", border: "1px solid #27272a", borderRadius: 8, fontSize: 11, padding: "8px 12px", minWidth: 160 }}>
+                                    <p style={{ color: "#52525b", marginBottom: 6 }}>{fmtTick(label as number)}</p>
+                                    {payload.map((entry) => {
+                                      const sname = String(entry.dataKey);
+                                      const v = Number(entry.value);
+                                      let label2: string;
+                                      let color: string = String(entry.color ?? "#a1a1aa");
+                                      if (isStablePlan) {
+                                        label2 = sname === "optimized" ? "Deployed" : "Idle";
+                                      } else if (sname === "optimized") {
+                                        const cur = payload.find((e) => e.dataKey === "current");
+                                        if (cur && Math.abs(v - Number(cur.value)) < 1) return null;
+                                        label2 = "With plan";
+                                        color = "#4ade80";
+                                      } else if (sname === "current") {
+                                        label2 = "Current path";
+                                        color = "#fbbf24";
+                                      } else if (sname.startsWith("s_")) {
+                                        const sc = forecastScenarios.find((s) => s.id === sname.slice(2));
+                                        label2 = sc?.label ?? sname;
+                                        color = sc?.color ?? color;
+                                      } else {
+                                        label2 = sname;
+                                      }
+                                      return (
+                                        <div key={sname} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0, display: "inline-block" }} />
+                                          <span style={{ color: "#a1a1aa" }}>{label2} : {fmtUSD(v)}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
                               }}
                             />
                             {showOptimized && (
