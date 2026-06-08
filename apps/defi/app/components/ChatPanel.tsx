@@ -81,7 +81,7 @@ export default function ChatPanel({
   return (
     <div
       className={`shrink-0 transition-colors ${isActive ? "border-t border-white/[0.06] backdrop-blur-xl" : ""}`}
-      style={{ background: isActive ? "rgba(8,6,18,0.82)" : "transparent" }}
+      style={{ background: isActive ? "rgba(8,6,18,0.70)" : "transparent" }}
     >
       {/* Thread — only when open and has messages */}
       {open && hasThread && (
