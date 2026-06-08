@@ -616,12 +616,12 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                               <>
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                                  <span className="text-sm font-bold text-yellow-400 tabular-nums">Idle {fmtUSD(activePlan?.stableUsd ?? 0)}</span>
+                                  <span className="text-xs font-bold text-yellow-400 tabular-nums">Idle {fmtUSD(activePlan?.stableUsd ?? 0)}</span>
                                 </div>
                                 {showOptimized && (
                                   <div className="flex items-center gap-1.5">
                                     <div className="w-2 h-2 rounded-full bg-green-400" />
-                                    <span className="text-sm font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
+                                    <span className="text-xs font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
                                   </div>
                                 )}
                               </>
@@ -629,12 +629,12 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                               <>
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                                  <span className="text-sm font-bold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</span>
+                                  <span className="text-xs font-bold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</span>
                                 </div>
                                 {showOptimized && (
                                   <div className="flex items-center gap-1.5">
                                     <div className="w-2 h-2 rounded-full bg-green-400" />
-                                    <span className="text-sm font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
+                                    <span className="text-xs font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
                                   </div>
                                 )}
                               </>
