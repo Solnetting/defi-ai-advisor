@@ -104,6 +104,7 @@ export default function Home() {
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
   const [swapOpen, setSwapOpen] = useState(false);
   const planTouchX = useRef(0);
+  const planDir = useRef(1);
   const [forecastScenarios, setForecastScenarios] = useState<Array<{
     id: string;
     type: "price" | "contribution";
@@ -427,7 +428,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
             const best = stableYields[stable.symbol]?.[0];
             if (!best) continue;
             const yr = stable.usd * best.apy / 100;
-            if (yr < 0.01) continue;
+            if (yr < 1 || stable.usd < 5) continue;
             plans.push({
               title: `Deploy your ${stable.symbol}`,
               impact: `+${fmtUSD(yr)}/yr`,
@@ -573,8 +574,8 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         onTouchEnd={(e) => {
                           const dx = e.changedTouches[0].clientX - planTouchX.current;
                           if (Math.abs(dx) > 48) {
-                            if (dx < 0) setCurrentPlanIndex((i) => Math.min(plans.length - 1, i + 1));
-                            else setCurrentPlanIndex((i) => Math.max(0, i - 1));
+                            if (dx < 0) { planDir.current = 1; setCurrentPlanIndex((i) => Math.min(plans.length - 1, i + 1)); }
+                            else { planDir.current = -1; setCurrentPlanIndex((i) => Math.max(0, i - 1)); }
                           }
                         }}
                       >
@@ -587,7 +588,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                               {plans.map((_, i) => (
                                 <button
                                   key={i}
-                                  onClick={() => setCurrentPlanIndex(i)}
+                                  onClick={() => { planDir.current = i > planIdx ? 1 : -1; setCurrentPlanIndex(i); }}
                                   className={`h-1.5 rounded-full transition-all duration-300 ${
                                     i === planIdx ? "w-4 bg-white" : "w-1.5 bg-gray-700 hover:bg-gray-500"
                                   }`}
@@ -596,6 +597,12 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                             </div>
                           )}
                         </div>
+
+                        {/* ── Animated plan content ── */}
+                        <div
+                          key={planIdx}
+                          style={{ animation: `${planDir.current >= 0 ? "plan-slide-from-right" : "plan-slide-from-left"} 0.22s ease-out both` }}
+                        >
 
                         {/* ── Plan title ── */}
                         <p className="px-5 pt-1 text-base font-semibold text-white leading-tight">
@@ -778,6 +785,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                             </button>
                           </div>
                         )}
+                        </div>{/* end animated plan content */}
                       </div>
                     );
               })()}
