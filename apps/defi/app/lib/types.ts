@@ -23,6 +23,13 @@ export interface Token {
   usdValue: number;
 }
 
+export interface StakedJup {
+  amount: number;          // JUP tokens staked (human-readable)
+  usd: number;             // USD value at current price
+  unstakingAmount: number; // JUP currently in 7-day unstaking window
+  jupPrice: number;
+}
+
 export interface WalletData {
   solBalance: number;
   stakedSOL: number;
@@ -37,6 +44,7 @@ export interface WalletData {
   stableUsd: number;
   otherUsd: number;
   idleStables: IdleStable[];
+  stakedJup: StakedJup;
   error?: string;
 }
 

@@ -4,6 +4,43 @@ All notable changes to DeFi AI Advisor are documented here.
 
 ---
 
+## [2026-06-08] — Session 6: Explore page validator picker, AI picks, safety labels, stake detection fix
+
+### Explore page — SOL staking tab with validator picker
+- Integrated `NativeStakeModal` directly into Explore page (SOL staking tab)
+- Validator list with full AI pick: surfaced best validator by risk-adjusted APY using safety multipliers
+- "AI Pick" banner with purple card, expandable criteria panel ("Why this one?")
+- Safety labels replace raw risk text: "Very Low" → "Safe", "Medium" → "Moderate", "High" → "High risk"
+- Safety dot system: colored circle instead of text color for risk indicator
+
+### StableYieldModal — AI pick
+- Added `pickBest()` scoring function: APY × safety multiplier (1.0 for Very Low, 0.5 for High)
+- Purple "AI Pick" card appears above option list for the top safe option
+- Expandable criteria ("Why this one?") explains the scoring logic to the user
+
+### Explore page — color fix
+- Yearly SOL earning potential: `text-yellow-600` → `text-green-600` (was reading as a warning, now positive)
+
+### Wallet API — stake detection rewrite
+- Replaced transaction-history crawl (3 pages × 100 txs + multiple batches) with direct `getProgramAccounts` using `memcmp` filters
+- Two parallel queries: staker authority (offset 12) + withdrawer authority (offset 44) — deduped by pubkey
+- JUP staking detection added: tracks staked JUP + unstaking window amounts via `StakedJup` type
+- Result: faster, more reliable, fewer Helius API calls
+
+### AI chat prompt — scenario vs prediction
+- Clarified: AI must calculate hypothetical scenarios ("what if SOL hits $500") but not predict prices
+- If user asks about a token they don't hold, decline with "You don't hold X" — not a blanket policy refusal
+
+### Forecast API — sell scenarios + non-SOL guard
+- Sell scenarios now classified: "sell half my SOL in 3 months" → negative `solPerMonth` contribution
+- Non-SOL questions (JUP, BTC, general) return `{type: null}` — no chart update, text reply only
+- `currentSOL` passed from client so "half" calculations are accurate
+
+### Bug fixes
+- `lightningcss-darwin-arm64` native binary added to `package.json` optionalDependencies
+
+---
+
 ## Typography + Portfolio layout (2026-06-08)
 
 ### Font: Space Mono → Geist Sans

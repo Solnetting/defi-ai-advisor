@@ -97,60 +97,34 @@ async function getStakedSOL(address: string): Promise<{ total: number; status: s
   const STAKE_PROGRAM = "Stake11111111111111111111111111111111111111";
 
   try {
-    const stakeAccounts = new Set<string>();
-    let before: string | undefined;
-
-    for (let page = 0; page < 3; page++) {
-      const url = `${HELIUS_BASE}/addresses/${address}/transactions?api-key=${HELIUS_API_KEY}&limit=100${before ? `&before=${before}` : ""}`;
-      const res = await fetch(url, { next: { revalidate: 60 } });
-      const txs = await res.json();
-      if (!Array.isArray(txs) || txs.length === 0) break;
-
-      for (const tx of txs) {
-        for (const ix of tx.instructions ?? []) {
-          if (ix.programId === STAKE_PROGRAM) {
-            for (const acct of ix.accounts ?? []) {
-              if (acct !== address) stakeAccounts.add(acct);
-            }
-          }
-          for (const inner of ix.innerInstructions ?? []) {
-            if (inner.programId === STAKE_PROGRAM) {
-              for (const acct of inner.accounts ?? []) {
-                if (acct !== address) stakeAccounts.add(acct);
-              }
-            }
-          }
-        }
-      }
-
-      if (txs.length < 100) break;
-      before = txs[txs.length - 1]?.signature;
-    }
-
-    if (stakeAccounts.size === 0) return { total: 0, status: "Inactive", epochHoursRemaining: 0 };
-
-    // Fetch accounts with jsonParsed to get activation epoch + current epoch in parallel
-    const [epochRes, ...accountChunkResults] = await Promise.all([
+    // Query stake accounts directly via getProgramAccounts with memcmp filters.
+    // Stake account binary layout (bincode): 4-byte variant | 8-byte rent_exempt_reserve
+    // | 32-byte staker (offset 12) | 32-byte withdrawer (offset 44) | …
+    // Run both filters + epoch info in parallel and deduplicate results.
+    const [epochRes, stakerRes, withdrawerRes] = await Promise.all([
       fetch(HELIUS_RPC, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "getEpochInfo", params: [] }),
+        body: JSON.stringify({ jsonrpc: "2.0", id: "epoch", method: "getEpochInfo", params: [] }),
       }).then((r) => r.json()),
-      ...[...stakeAccounts].reduce<string[][]>((chunks, acct, i) => {
-        if (i % 100 === 0) chunks.push([]);
-        chunks[chunks.length - 1].push(acct);
-        return chunks;
-      }, []).map((chunk) =>
-        fetch(HELIUS_RPC, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0", id: 1,
-            method: "getMultipleAccounts",
-            params: [chunk, { encoding: "jsonParsed" }],
-          }),
-        }).then((r) => r.json())
-      ),
+      fetch(HELIUS_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: "staker",
+          method: "getProgramAccounts",
+          params: [STAKE_PROGRAM, { encoding: "jsonParsed", filters: [{ memcmp: { offset: 12, bytes: address } }] }],
+        }),
+      }).then((r) => r.json()),
+      fetch(HELIUS_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: "withdrawer",
+          method: "getProgramAccounts",
+          params: [STAKE_PROGRAM, { encoding: "jsonParsed", filters: [{ memcmp: { offset: 44, bytes: address } }] }],
+        }),
+      }).then((r) => r.json()),
     ]);
 
     const currentEpoch: number = epochRes.result?.epoch ?? 0;
@@ -159,32 +133,40 @@ async function getStakedSOL(address: string): Promise<{ total: number; status: s
     const epochHoursRemaining = Math.max(1, Math.round((slotsInEpoch - slotIndex) * 0.4 / 3600));
     const MAX_EPOCH = BigInt("18446744073709551615");
 
+    // Deduplicate by pubkey (staker == withdrawer for most user-owned accounts)
+    const seen = new Set<string>();
+    const accounts: Array<{ lamports: number; data: { parsed?: { info?: { stake?: { delegation?: Record<string, string> } } } } }> = [];
+    for (const entry of [...(stakerRes.result ?? []), ...(withdrawerRes.result ?? [])]) {
+      if (!seen.has(entry.pubkey)) {
+        seen.add(entry.pubkey);
+        accounts.push(entry.account);
+      }
+    }
+
+    if (accounts.length === 0) return { total: 0, status: "Inactive", epochHoursRemaining };
+
     let total = 0;
-    const statuses: Set<string> = new Set();
+    const statuses = new Set<string>();
 
-    for (const chunkResult of accountChunkResults) {
-      for (const acc of chunkResult.result?.value ?? []) {
-        if (acc?.owner !== STAKE_PROGRAM) continue;
-        total += acc.lamports ?? 0;
-
-        const delegation = acc.data?.parsed?.info?.stake?.delegation;
-        if (delegation) {
-          const activationEpoch = Number(delegation.activationEpoch);
-          const deactivationEpoch = BigInt(delegation.deactivationEpoch ?? MAX_EPOCH);
-          if (deactivationEpoch < MAX_EPOCH && Number(deactivationEpoch) <= currentEpoch) {
-            statuses.add("Inactive");
-          } else if (deactivationEpoch < MAX_EPOCH) {
-            statuses.add("Deactivating");
-          } else if (activationEpoch >= currentEpoch) {
-            statuses.add("Activating");
-          } else {
-            statuses.add("Active");
-          }
+    for (const acc of accounts) {
+      total += acc.lamports ?? 0;
+      const delegation = acc.data?.parsed?.info?.stake?.delegation;
+      if (delegation) {
+        const activationEpoch = Number(delegation.activationEpoch ?? 0);
+        const deactivationStr = delegation.deactivationEpoch ?? MAX_EPOCH.toString();
+        const deactivationEpoch = BigInt(deactivationStr);
+        if (deactivationEpoch < MAX_EPOCH && Number(deactivationEpoch) <= currentEpoch) {
+          statuses.add("Inactive");
+        } else if (deactivationEpoch < MAX_EPOCH) {
+          statuses.add("Deactivating");
+        } else if (activationEpoch >= currentEpoch) {
+          statuses.add("Activating");
+        } else {
+          statuses.add("Active");
         }
       }
     }
 
-    // Precedence: Deactivating > Activating > Active > Inactive
     const status = statuses.has("Deactivating") ? "Deactivating"
       : statuses.has("Activating") ? "Activating"
       : statuses.has("Active") ? "Active"
@@ -200,6 +182,27 @@ interface IdleStable {
   symbol: string;
   mint: string;
   usd: number;
+}
+
+async function getStakedJUP(address: string): Promise<{ amount: number; usd: number; unstakingAmount: number; jupPrice: number }> {
+  try {
+    const [stakingRes, priceRes] = await Promise.all([
+      fetch(`https://api.jup.ag/portfolio/v1/staked-jup/${address}`, { next: { revalidate: 60 } }),
+      fetch("https://api.coingecko.com/api/v3/simple/price?ids=jupiter-exchange-solana&vs_currencies=usd", { next: { revalidate: 60 } }),
+    ]);
+    const staking = await stakingRes.json();
+    const priceData = await priceRes.json();
+    const jupPrice: number = priceData?.["jupiter-exchange-solana"]?.usd ?? 0;
+    // Jupiter portfolio API returns stakedAmount already in human-readable JUP (not micro-units)
+    const stakedAmount: number = staking.stakedAmount ?? 0;
+    const unstakingAmount: number = (staking.unstaking ?? []).reduce(
+      (s: number, u: { amount?: number }) => s + (u.amount ?? 0),
+      0
+    );
+    return { amount: stakedAmount, usd: stakedAmount * jupPrice, unstakingAmount, jupPrice };
+  } catch {
+    return { amount: 0, usd: 0, unstakingAmount: 0, jupPrice: 0 };
+  }
 }
 
 async function getTokenBreakdown(
@@ -253,11 +256,12 @@ export async function GET(req: NextRequest) {
   if (!address) return NextResponse.json({ error: "No address provided" }, { status: 400 });
 
   try {
-    const [balancesRes, stakedResult, solPriceData, kaminoPositions] = await Promise.all([
+    const [balancesRes, stakedResult, solPriceData, kaminoPositions, stakedJup] = await Promise.all([
       fetch(`${HELIUS_BASE}/addresses/${address}/balances?api-key=${HELIUS_API_KEY}`),
       getStakedSOL(address),
       getSolPrice(),
       getKaminoPositions(address),
+      getStakedJUP(address),
     ]);
     const stakedSOL = stakedResult.total;
     const stakeStatus = stakedResult.status;
@@ -345,6 +349,7 @@ export async function GET(req: NextRequest) {
       stableUsd: tokenBreakdown.stableUsd,
       otherUsd: tokenBreakdown.otherUsd,
       idleStables: tokenBreakdown.idleStables,
+      stakedJup,
     });
   } catch {
     return NextResponse.json({ error: "Failed to fetch wallet data" }, { status: 500 });

@@ -17,7 +17,9 @@ Rules:
 - When explaining risk, reference the component scores (protocol, concentration, leverage, dry powder).
 - Keep answers short — 3–5 lines max unless the user asks for detail.
 - If data is unavailable, say so explicitly instead of guessing.
-- Never predict prices. Never guarantee returns.`;
+- Never predict where prices will go or say a price "will" reach a target. Never guarantee returns.
+- DO calculate hypothetical scenarios when the user asks "what if X hits $Y": multiply their holdings of X by the target price and show the result. This is arithmetic, not a prediction.
+- If the user asks about a token they don't hold (e.g. BTC), say "You don't hold any BTC in this portfolio" — not "I can't predict prices." The reason to decline is missing holdings, not a policy against math.`;
 
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
