@@ -598,7 +598,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         {/* ── Impact badge ── */}
                         {activePlan && (
                           <div className="px-5 pt-2 pb-1">
-                            <span className={`inline-block text-xs font-medium border rounded-full px-2 py-0.5 ${impactBorder}`}>
+                            <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${impactBorder}`}>
                               {impactLabel}
                             </span>
                           </div>
