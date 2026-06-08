@@ -162,6 +162,7 @@ export default function PortfolioPage() {
 
                     {/* Deployment bar */}
                     <div className="space-y-1.5">
+                      <p className="text-xs text-gray-600">Staked vs idle</p>
                       <div className="relative h-1.5 rounded-full overflow-hidden bg-gray-900">
                         <div className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full"
                           style={{ width: `${earningPct}%` }} />
