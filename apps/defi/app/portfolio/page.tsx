@@ -268,7 +268,6 @@ export default function PortfolioPage() {
                   </div>
                 );
               })()}
-              </div>
 
               {/* ── Assets (unified — SOL + positions + all tokens) ── */}
               {(() => {
