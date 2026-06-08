@@ -562,10 +562,10 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                     const gainOptimized = finalOptimizedUSD - todayUSD;
                     const pct = totalUsd > 0 && activePlan ? (activePlan.impactUsd / totalUsd) * 100 : 0;
                     const [impactLabel, impactBorder] =
-                      pct >= 5   ? ["VERY HIGH IMPACT", "border-green-500 text-green-400"]
-                      : pct >= 2 ? ["HIGH IMPACT",      "border-green-500 text-green-400"]
-                      : pct >= 0.5 ? ["MODERATE IMPACT", "border-yellow-500 text-yellow-400"]
-                      :              ["LOW IMPACT",       "border-gray-700 text-gray-500"];
+                      pct >= 5   ? ["Very high impact", "border-green-500 text-green-400"]
+                      : pct >= 2 ? ["High impact",      "border-green-500 text-green-400"]
+                      : pct >= 0.5 ? ["Moderate impact", "border-yellow-500 text-yellow-400"]
+                      :              ["Low impact",       "border-gray-700 text-gray-500"];
 
                     return (
                       <div
@@ -604,25 +604,23 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                           style={{ animation: `${planDir.current >= 0 ? "plan-slide-from-right" : "plan-slide-from-left"} 0.22s ease-out both` }}
                         >
 
-                        {/* ── Plan title ── */}
-                        <p className="px-5 pt-1 text-base font-semibold text-white leading-tight">
-                          {activePlan ? activePlan.title : "Portfolio forecast"}
-                        </p>
+                        {/* ── Plan title + badge inline ── */}
+                        <div className="px-5 pt-1 flex items-center gap-2 flex-wrap">
+                          <p className="text-base font-semibold text-white leading-tight">
+                            {activePlan ? activePlan.title : "Portfolio forecast"}
+                          </p>
+                          {activePlan && (
+                            <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${impactBorder}`}>
+                              {impactLabel}
+                            </span>
+                          )}
+                        </div>
 
                         {/* ── Hero impact number ── */}
                         {activePlan && (
                           <p className="px-5 pt-2 text-2xl font-bold text-green-400 tracking-tight leading-none">
                             {activePlan.impact}
                           </p>
-                        )}
-
-                        {/* ── Impact badge ── */}
-                        {activePlan && (
-                          <div className="px-5 pt-2 pb-1">
-                            <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${impactBorder}`}>
-                              {impactLabel}
-                            </span>
-                          </div>
                         )}
 
                         {/* ── Detail text ── */}
