@@ -147,9 +147,9 @@ export default function ChatPanel({
       {/* Chip input — always visible */}
       <div className="px-4 py-3">
         <div className={`flex items-center border rounded-full pl-4 pr-1.5 py-1.5 transition-all ${
-          focused ? "border-purple-700" : "border-purple-700/40"
+          focused ? "border-purple-600" : "border-purple-600/55"
         }`}>
-          <span className={`text-xs shrink-0 mr-3 transition-colors ${focused ? "text-purple-400" : "text-purple-700"}`}>
+          <span className={`text-xs shrink-0 mr-3 transition-colors ${focused ? "text-purple-400" : "text-purple-500"}`}>
             ✦
           </span>
           <input
@@ -161,7 +161,7 @@ export default function ChatPanel({
             onKeyDown={(e) => e.key === "Enter" && send()}
             placeholder={placeholder}
             className={`flex-1 bg-transparent text-sm outline-none min-w-0 transition-colors ${
-              focused ? "text-white placeholder-gray-700" : "text-gray-600 placeholder-gray-700"
+              focused ? "text-white placeholder-gray-600" : "text-gray-400 placeholder-gray-600"
             }`}
           />
           {hasThread && !open && !focused ? (
