@@ -570,7 +570,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
                         {/* ── Plan label + arrows ── */}
                         <div className="flex items-center justify-between px-5 pt-5 pb-1">
-                          <p className="text-xs text-yellow-500 uppercase tracking-widest font-bold">
+                          <p className="text-xs text-gray-600">
                             Plan {planIdx + 1}{plans.length > 1 ? ` of ${plans.length}` : ""}
                           </p>
                           {plans.length > 1 && (
@@ -598,7 +598,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         {/* ── Impact badge ── */}
                         {activePlan && (
                           <div className="px-5 pt-2 pb-1">
-                            <span className={`inline-block text-[9px] font-bold tracking-widest uppercase border rounded-full px-2 py-0.5 ${impactBorder}`}>
+                            <span className={`inline-block text-xs font-medium border rounded-full px-2 py-0.5 ${impactBorder}`}>
                               {impactLabel}
                             </span>
                           </div>
@@ -615,26 +615,26 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                             {isStablePlan ? (
                               <>
                                 <div className="flex items-center gap-1.5">
-                                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                                  <span className="text-xs font-bold text-yellow-400 tabular-nums">Idle {fmtUSD(activePlan?.stableUsd ?? 0)}</span>
+                                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                                  <span className="text-xs text-gray-600">Idle <span className="text-yellow-400 font-medium tabular-nums">{fmtUSD(activePlan?.stableUsd ?? 0)}</span></span>
                                 </div>
                                 {showOptimized && (
                                   <div className="flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full bg-green-400" />
-                                    <span className="text-xs font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                                    <span className="text-xs text-gray-600">Plan <span className="text-green-400 font-medium tabular-nums">+{fmtUSD(gainOptimized)}</span></span>
                                   </div>
                                 )}
                               </>
                             ) : (
                               <>
                                 <div className="flex items-center gap-1.5">
-                                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                                  <span className="text-xs font-bold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</span>
+                                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                                  <span className="text-xs text-gray-600">Current <span className="text-yellow-400 font-medium tabular-nums">+{fmtUSD(gainCurrent)}</span></span>
                                 </div>
                                 {showOptimized && (
                                   <div className="flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full bg-green-400" />
-                                    <span className="text-xs font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                                    <span className="text-xs text-gray-600">Plan <span className="text-green-400 font-medium tabular-nums">+{fmtUSD(gainOptimized)}</span></span>
                                   </div>
                                 )}
                               </>
