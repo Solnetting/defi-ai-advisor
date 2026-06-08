@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -103,6 +103,7 @@ export default function Home() {
   const [stableModal, setStableModal] = useState<{ symbol: string; idleUsd: number } | null>(null);
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
   const [swapOpen, setSwapOpen] = useState(false);
+  const planTouchX = useRef(0);
   const [forecastScenarios, setForecastScenarios] = useState<Array<{
     id: string;
     type: "price" | "contribution";
@@ -566,19 +567,32 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                       :              ["LOW IMPACT",       "border-gray-700 text-gray-500"];
 
                     return (
-                      <div className="mt-4 bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden">
+                      <div
+                        className="mt-4 bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden"
+                        onTouchStart={(e) => { planTouchX.current = e.touches[0].clientX; }}
+                        onTouchEnd={(e) => {
+                          const dx = e.changedTouches[0].clientX - planTouchX.current;
+                          if (Math.abs(dx) > 48) {
+                            if (dx < 0) setCurrentPlanIndex((i) => Math.min(plans.length - 1, i + 1));
+                            else setCurrentPlanIndex((i) => Math.max(0, i - 1));
+                          }
+                        }}
+                      >
 
-                        {/* ── Plan label + arrows ── */}
+                        {/* ── Plan label + dot pagination ── */}
                         <div className="flex items-center justify-between px-5 pt-5 pb-1">
-                          <p className="text-xs text-gray-600">
-                            Plan {planIdx + 1}{plans.length > 1 ? ` of ${plans.length}` : ""}
-                          </p>
+                          <p className="text-xs text-gray-600">Plan</p>
                           {plans.length > 1 && (
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => setCurrentPlanIndex((i) => Math.max(0, i - 1))} disabled={planIdx === 0}
-                                className="text-gray-600 hover:text-white disabled:opacity-20 transition-colors text-base leading-none">←</button>
-                              <button onClick={() => setCurrentPlanIndex((i) => Math.min(plans.length - 1, i + 1))} disabled={planIdx === plans.length - 1}
-                                className="text-gray-600 hover:text-white disabled:opacity-20 transition-colors text-base leading-none">→</button>
+                            <div className="flex items-center gap-1.5">
+                              {plans.map((_, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setCurrentPlanIndex(i)}
+                                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                                    i === planIdx ? "w-4 bg-white" : "w-1.5 bg-gray-700 hover:bg-gray-500"
+                                  }`}
+                                />
+                              ))}
                             </div>
                           )}
                         </div>
