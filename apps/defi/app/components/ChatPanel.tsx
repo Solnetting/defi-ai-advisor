@@ -27,8 +27,6 @@ function AIIcon({ color = "#a855f7", size = 14 }: { color?: string; size?: numbe
   );
 }
 
-const GLASS_BG = "rgba(8,6,18,0.92)";
-
 export default function ChatPanel({
   context = "",
   placeholder = "Ask about your portfolio…",
@@ -78,10 +76,12 @@ export default function ChatPanel({
 
   const hasThread = messages.length > 0 || loading;
 
+  const isActive = open && hasThread;
+
   return (
     <div
-      className="shrink-0 border-t border-white/[0.06] backdrop-blur-xl"
-      style={{ background: GLASS_BG }}
+      className={`shrink-0 transition-colors ${isActive ? "border-t border-white/[0.06] backdrop-blur-xl" : ""}`}
+      style={{ background: isActive ? "rgba(8,6,18,0.92)" : "transparent" }}
     >
       {/* Thread — only when open and has messages */}
       {open && hasThread && (
