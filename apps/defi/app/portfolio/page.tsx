@@ -196,52 +196,59 @@ export default function PortfolioPage() {
                 );
               })()}
 
-              {/* ── Risk analysis (collapsible) ── */}
-              <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setRiskOpen(o => !o)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left"
-                >
-                  <span className="text-sm font-semibold">Risk Analysis</span>
-                  <div className="flex items-center gap-3">
-                    {/* Mini spectrum bar */}
-                    <div className="relative w-14 h-1.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(to right, #22c55e, #eab308, #f97316, #ef4444)" }}>
-                      <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-900"
-                        style={{ left: `calc(${Math.min(riskScore, 99)}% - 5px)` }} />
-                    </div>
-                    <span className={`text-sm font-bold ${riskColor}`}>{riskScore}/100 · {riskLabel}</span>
-                    <span className="text-gray-600 text-xs">{riskOpen ? "↑" : "↓"}</span>
-                  </div>
-                </button>
+              {/* ── Divider ── */}
+              <div className="h-px bg-gray-900" />
 
-                {riskOpen && (
-                  <div className="border-t border-gray-900 px-4 py-3 space-y-3">
-                    {/* Full spectrum bar */}
-                    <div className="relative h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(to right, #22c55e, #eab308, #f97316, #ef4444)" }}>
-                      <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white border-2 border-gray-900 shadow"
-                        style={{ left: `calc(${Math.min(riskScore, 99)}% - 6px)` }} />
-                    </div>
-                    <div className="space-y-2 pt-1">
-                      {[
-                        { label: "Protocol Exposure", score: protocolScore, weight: "50%", desc: "Weighted by position type risk" },
-                        { label: "Concentration", score: concentrationScore, weight: "30%", desc: "Spread across strategies" },
-                        { label: "Derivatives / Leverage", score: derivativesScore, weight: "20%", desc: "Kamino multiply positions" },
-                        { label: "Opportunity Readiness", score: opportunityScore, weight: "penalty", desc: "Liquid capital available to act" },
-                      ].map(({ label, score, weight, desc }) => (
-                        <div key={label} className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-gray-400 leading-none">{label} <span className="text-gray-700">· {weight}</span></p>
-                            <p className="text-xs text-gray-700 mt-0.5">{desc}</p>
-                          </div>
-                          <span className={`text-xs font-bold shrink-0 ${score > 50 ? "text-orange-400" : score > 20 ? "text-yellow-400" : "text-green-400"}`}>
-                            {score}
-                          </span>
+              {/* ── Risk analysis (tappable row) ── */}
+              {(() => {
+                const riskBadge = riskScore <= 20 ? "border-green-700 text-green-400"
+                  : riskScore <= 40 ? "border-yellow-700 text-yellow-400"
+                  : riskScore <= 65 ? "border-orange-700 text-orange-400"
+                  : "border-red-700 text-red-400";
+                return (
+                  <div>
+                    <button
+                      onClick={() => setRiskOpen(o => !o)}
+                      className="w-full flex items-center justify-between py-3 active:opacity-60 transition-opacity"
+                    >
+                      <span className="text-xs text-gray-600">Risk analysis</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${riskBadge}`}>
+                          {riskScore}/100 · {riskLabel}
+                        </span>
+                        <span className="text-gray-700 text-xs">{riskOpen ? "↑" : "↓"}</span>
+                      </div>
+                    </button>
+
+                    {riskOpen && (
+                      <div className="pb-3 space-y-3">
+                        <div className="relative h-1.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(to right, #22c55e, #eab308, #f97316, #ef4444)" }}>
+                          <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-black shadow"
+                            style={{ left: `calc(${Math.min(riskScore, 99)}% - 5px)` }} />
                         </div>
-                      ))}
-                    </div>
+                        <div className="space-y-2">
+                          {[
+                            { label: "Protocol Exposure", score: protocolScore, weight: "50%", desc: "Weighted by position type risk" },
+                            { label: "Concentration", score: concentrationScore, weight: "30%", desc: "Spread across strategies" },
+                            { label: "Derivatives / Leverage", score: derivativesScore, weight: "20%", desc: "Kamino multiply positions" },
+                            { label: "Opportunity Readiness", score: opportunityScore, weight: "penalty", desc: "Liquid capital available to act" },
+                          ].map(({ label, score, weight, desc }) => (
+                            <div key={label} className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-400 leading-none">{label} <span className="text-gray-700">· {weight}</span></p>
+                                <p className="text-xs text-gray-700 mt-0.5">{desc}</p>
+                              </div>
+                              <span className={`text-xs font-medium shrink-0 ${score > 50 ? "text-orange-400" : score > 20 ? "text-yellow-400" : "text-green-400"}`}>
+                                {score}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
 
               {/* ── Assets (unified — SOL + positions + all tokens) ── */}
