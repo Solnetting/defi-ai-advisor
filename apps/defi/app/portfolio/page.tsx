@@ -30,18 +30,42 @@ function computeRisk(data: WalletData) {
   const kaminoUsd = data.kaminoPositions.reduce((s, p) => s + p.netValueUsd, 0);
   const nativeSolUsd = (data.idleSOL + data.stakedSOL) * data.solPrice;
   const jupStakedUsd = (data.stakedJup?.usd ?? 0) + (data.stakedJup?.unstakingAmount ?? 0) * (data.stakedJup?.jupPrice ?? 0);
-  const totalUsd = nativeSolUsd + kaminoUsd + data.stableUsd + data.otherUsd + jupStakedUsd;
+  const perps = data.perpPositions ?? [];
+  const perpCollateralUsd = perps.reduce((s, p) => s + p.collateralUsd, 0);
+  const totalUsd = nativeSolUsd + kaminoUsd + data.stableUsd + data.otherUsd + jupStakedUsd + perpCollateralUsd;
   if (totalUsd === 0) return { totalUsd: 0, protocolScore: 0, concentrationScore: 0, derivativesScore: 0, opportunityScore: 0, riskScore: 0, riskLabel: "Low", riskColor: "text-green-400" };
 
   let protocolSum = 0;
   for (const p of data.kaminoPositions) protocolSum += p.netValueUsd * (RISK_WEIGHTS[p.type] ?? 0.3);
-  // Staked JUP: governance lock with token price risk, no liquidation risk → weight 0.15
   protocolSum += data.stakedSOL * data.solPrice * 0.1 + data.idleSOL * data.solPrice * 0.05 + data.stableUsd * 0.02 + data.otherUsd * 0.15 + jupStakedUsd * 0.15;
+  // Perps are protocol risk (liquidation possible) — weight by leverage
+  for (const p of perps) protocolSum += p.collateralUsd * Math.min(1.0, 0.3 + (p.leverage - 1) * 0.1);
   const protocolScore = Math.min(100, Math.round((protocolSum / totalUsd) * 100));
 
-  const hasLeverage = data.kaminoPositions.some((p) => p.type === "multiply");
-  const leverageUsdAmt = data.kaminoPositions.filter((p) => p.type === "multiply").reduce((s, p) => s + p.netValueUsd, 0);
-  const derivativesScore = hasLeverage ? Math.min(100, Math.round(50 + (leverageUsdAmt / totalUsd) * 50)) : 0;
+  // Derivatives score: Kamino leverage + Jupiter perps
+  const hasKaminoLev = data.kaminoPositions.some((p) => p.type === "multiply");
+  const kaminoLevUsd = data.kaminoPositions.filter((p) => p.type === "multiply").reduce((s, p) => s + p.netValueUsd, 0);
+  const hasPerps = perps.length > 0;
+  // Liquidation proximity: ratio of (markPrice - liqPrice) / markPrice per position, weighted by size
+  let liqProximityPenalty = 0;
+  for (const p of perps) {
+    if (p.markPrice > 0 && p.liquidationPrice > 0) {
+      const distPct = p.side === "long"
+        ? (p.markPrice - p.liquidationPrice) / p.markPrice
+        : (p.liquidationPrice - p.markPrice) / p.markPrice;
+      // < 10% from liquidation → very high penalty; < 20% → high; < 30% → moderate
+      const penalty = distPct < 0.10 ? 40 : distPct < 0.20 ? 25 : distPct < 0.30 ? 10 : 5;
+      liqProximityPenalty += penalty * (p.collateralUsd / totalUsd);
+    }
+  }
+  const avgLeverage = perps.length > 0
+    ? perps.reduce((s, p) => s + p.leverage * (p.collateralUsd / perpCollateralUsd), 0)
+    : 0;
+  const perpLevScore = hasPerps ? Math.min(100, Math.round(30 + avgLeverage * 8 + liqProximityPenalty)) : 0;
+  const derivativesScore = Math.min(100, Math.round(
+    (hasKaminoLev ? 50 + (kaminoLevUsd / totalUsd) * 50 : 0) * 0.5 +
+    perpLevScore * 0.5
+  ));
 
   const defiTypes = new Set(data.kaminoPositions.map((p) => p.type));
   const hasDeFi = kaminoUsd / totalUsd > 0.2;
@@ -56,7 +80,8 @@ function computeRisk(data: WalletData) {
   const opportunityScore = dryPowderPct < 1 ? 10 : dryPowderPct < 5 ? 5 : 0;
 
   const rawScore = Math.round(protocolScore * 0.5 + concentrationScore * 0.3 + derivativesScore * 0.2 + opportunityScore);
-  const riskScore = hasLeverage ? Math.max(41, rawScore) : rawScore;
+  const hasAnyLeverage = hasKaminoLev || hasPerps;
+  const riskScore = hasAnyLeverage ? Math.max(41, rawScore) : rawScore;
   const riskLabel = riskScore <= 20 ? "Low" : riskScore <= 40 ? "Medium" : riskScore <= 65 ? "High" : "Very High";
   const riskColor = riskScore <= 20 ? "text-green-400" : riskScore <= 40 ? "text-yellow-400" : riskScore <= 65 ? "text-orange-400" : "text-red-400";
 
@@ -149,46 +174,51 @@ export default function PortfolioPage() {
               {/* ── Total value + deployment bar ── */}
               {(() => {
                 const idleStableUsd = (data.idleStables ?? []).reduce((s, x) => s + x.usd, 0);
-                const earningUsd = data.stakedSOL * data.solPrice + kaminoUsd + (data.stakedJup?.usd ?? 0) + (data.stableUsd - idleStableUsd);
+                const perpCollateralUsd = (data.perpPositions ?? []).reduce((s, p) => s + p.collateralUsd, 0);
+                // Three buckets: staked/earning | perps collateral | idle
+                const stakedUsd = data.stakedSOL * data.solPrice + kaminoUsd + (data.stakedJup?.usd ?? 0) + (data.stableUsd - idleStableUsd);
                 const idleUsd = data.idleSOL * data.solPrice + idleStableUsd;
                 const t = totalUsd || 1;
-                const earningPct = (earningUsd / t) * 100;
+                const stakedPct = (stakedUsd / t) * 100;
+                const perpsPct = (perpCollateralUsd / t) * 100;
                 const idlePct = (idleUsd / t) * 100;
                 const fmt = (p: number) => p < 1 ? "<1%" : `${Math.round(p)}%`;
+                const hasPerps = perpCollateralUsd > 0;
                 const hasIdle = idleUsd > 0;
                 return (
                   <div className="pt-2 pb-5 space-y-3">
                     <p className="text-5xl font-bold tracking-tight">{fmtUSD(totalUsd)}</p>
 
-                    {/* Deployment bar */}
+                    {/* 3-segment bar: staked | perps | idle */}
                     <div className="space-y-1.5">
-                      <p className="text-xs text-gray-600">Staked vs idle</p>
+                      <p className="text-xs text-gray-600">Staked · Perps · Idle</p>
                       <div className="relative h-1.5 rounded-full overflow-hidden bg-gray-900">
-                        <div className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full"
-                          style={{ width: `${earningPct}%` }} />
+                        <div className="absolute left-0 top-0 h-full bg-green-500"
+                          style={{ width: `${stakedPct}%` }} />
+                        {hasPerps && (
+                          <div className="absolute top-0 h-full bg-violet-500"
+                            style={{ left: `${stakedPct}%`, width: `${Math.max(perpsPct, 1.5)}%` }} />
+                        )}
                         {hasIdle && (
                           <div className="absolute top-0 h-full bg-amber-500"
-                            style={{ left: `${earningPct}%`, width: `${Math.max(idlePct, 1.5)}%` }} />
+                            style={{ left: `${stakedPct + (hasPerps ? Math.max(perpsPct, 1.5) : 0)}%`, width: `${Math.max(idlePct, 1.5)}%` }} />
                         )}
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1">
                         {data.stakedSOL > 0 && (
-                          <span className="text-xs text-gray-600">Staked <span className="text-gray-400">{fmtUSD(data.stakedSOL * data.solPrice)}</span></span>
+                          <span className="text-xs text-gray-600">Staked <span className="text-green-600">{fmtUSD(data.stakedSOL * data.solPrice)}</span></span>
                         )}
                         {kaminoUsd > 0 && (
-                          <span className="text-xs text-gray-600">DeFi <span className="text-gray-400">{fmtUSD(kaminoUsd)}</span></span>
+                          <span className="text-xs text-gray-600">DeFi <span className="text-green-600">{fmtUSD(kaminoUsd)}</span></span>
                         )}
                         {(data.stakedJup?.usd ?? 0) > 0 && (
-                          <span className="text-xs text-gray-600">JUP <span className="text-gray-400">{fmtUSD(data.stakedJup.usd)}</span></span>
+                          <span className="text-xs text-gray-600">JUP <span className="text-green-600">{fmtUSD(data.stakedJup.usd)}</span></span>
                         )}
-                        {data.stableUsd > 0 && (
-                          <span className="text-xs text-gray-600">Stables <span className="text-gray-400">{fmtUSD(data.stableUsd)}</span></span>
-                        )}
-                        {data.otherUsd > 0 && (
-                          <span className="text-xs text-gray-600">Other <span className="text-gray-400">{fmtUSD(data.otherUsd)}</span></span>
+                        {hasPerps && (
+                          <span className="text-xs text-gray-600">Perps <span className="text-violet-400">{fmtUSD(perpCollateralUsd)} · {fmt(perpsPct)}</span></span>
                         )}
                         {data.idleSOL > 0.001 && (
-                          <span className="text-xs text-amber-800">Idle SOL <span className="text-amber-700">{fmtUSD(data.idleSOL * data.solPrice)} · {fmt(idlePct)}</span></span>
+                          <span className="text-xs text-gray-600">Idle <span className="text-amber-700">{fmtUSD(idleUsd)} · {fmt(idlePct)}</span></span>
                         )}
                       </div>
                     </div>
@@ -331,6 +361,55 @@ export default function PortfolioPage() {
                         );
                       })}
 
+                      {/* Jupiter Perp Positions */}
+                      {(data.perpPositions ?? []).map((p, i) => {
+                        const pnlPositive = p.pnlUsd >= 0;
+                        const tokenIcon = p.tokenSymbol === "SOL"
+                          ? "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+                          : p.tokenSymbol === "BTC"
+                          ? "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHpQxNRtKFXJGTpq6BEfp/logo.png"
+                          : null;
+                        // Distance to liquidation as a % of mark price
+                        const distToLiq = p.markPrice > 0 && p.liquidationPrice > 0
+                          ? Math.abs(p.markPrice - p.liquidationPrice) / p.markPrice * 100
+                          : null;
+                        const liqWarning = distToLiq !== null && distToLiq < 20;
+                        return (
+                          <div key={i} className="flex items-center justify-between px-4 py-3 gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                                {tokenIcon ? (
+                                  <img src={tokenIcon} alt={p.tokenSymbol}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                                ) : (
+                                  <span className="text-[10px] text-gray-500 font-medium">{p.tokenSymbol[0]}</span>
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-medium">{p.tokenSymbol} {p.side === "long" ? "Long" : "Short"}</p>
+                                  <span className={`text-[10px] font-medium border rounded-full px-1.5 py-px ${p.side === "long" ? "text-green-400 border-green-900" : "text-red-400 border-red-900"}`}>
+                                    {p.leverage.toFixed(1)}×
+                                  </span>
+                                </div>
+                                <p className={`text-xs mt-0.5 ${liqWarning ? "text-red-500" : "text-gray-600"}`}>
+                                  Liq {p.liquidationPrice > 0 ? `$${p.liquidationPrice.toFixed(2)}` : "—"}
+                                  {distToLiq !== null && <span className={liqWarning ? " · ⚠ close" : ""}>{liqWarning ? "" : ` · ${distToLiq.toFixed(0)}% away`}</span>}
+                                  {" · "}<a href="https://jup.ag/perps" target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-400">jup.ag ↗</a>
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium">{fmtUSD(p.collateralUsd)}</p>
+                              <p className={`text-xs mt-0.5 tabular-nums ${pnlPositive ? "text-green-500" : "text-red-400"}`}>
+                                {pnlPositive ? "+" : ""}{fmtUSD(p.pnlUsd)} PnL
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+
                       {/* Staked JUP */}
                       {(data.stakedJup?.amount ?? 0) > 0.001 && (
                         <div className="flex items-center justify-between px-4 py-3 gap-3">
@@ -441,6 +520,9 @@ export default function PortfolioPage() {
           data.stableUsd > 0
             ? `Idle stablecoins: ${(data.idleStables ?? []).map(s => `${s.symbol} $${Math.round(s.usd)}`).join(", ")}`
             : "No idle stablecoins.",
+          (data.perpPositions ?? []).length > 0
+            ? `Jupiter Perp positions: ${data.perpPositions.map(p => `${p.tokenSymbol} ${p.side} ${p.leverage.toFixed(1)}x (collateral $${Math.round(p.collateralUsd)}, PnL $${p.pnlUsd.toFixed(2)}, liq $${p.liquidationPrice.toFixed(2)})`).join("; ")}`
+            : "No open perp positions.",
           `Stake status: ${data.stakeStatus}`,
         ].join("\n") : ""}
       />

@@ -4,6 +4,47 @@ All notable changes to DeFi AI Advisor are documented here.
 
 ---
 
+## [2026-06-08] — Session 7: Jupiter Perps detection + 3-segment capital bar
+
+### Jupiter Perps position detection (Task 1)
+- `/api/wallet/route.ts`: added `getJupiterPerpPositions()` — fetches `https://api.jup.ag/portfolio/v1/positions/{address}`, filters `type: "leverage"` elements
+- Returns `PerpPosition[]` with: tokenSymbol, side, leverage, collateralUsd, sizeUsd, pnlUsd, netValueUsd, liquidationPrice, markPrice, entryPrice, stopLoss
+- `lib/types.ts`: new `PerpPosition` interface + `perpPositions` field on `WalletData`
+- Token symbol map: added cbBTC (`3NZ9JMV…`) as BTC (Jupiter Perps primary), Wormhole wETH (`7vfCXT…`) as ETH
+
+### Risk engine — perps-aware (Portfolio page)
+- `computeRisk()` now includes:
+  - Perp collateral in `totalUsd`
+  - Liquidation proximity penalty: <10% from liq → +40pts, <20% → +25pts, <30% → +10pts
+  - Average leverage weighted by collateral share → `perpLevScore`
+  - `derivativesScore` now combines Kamino leverage + perp leverage score
+  - `hasPerps` triggers minimum risk floor (≥41) same as Kamino multiply
+- AI context on Portfolio page includes open perp positions with side/leverage/collateral/PnL/liq
+
+### Portfolio asset list — perp positions
+- Each open perp shows: token icon + "{SYMBOL} Long/Short" + leverage badge (green=long, red=short)
+- Liquidation price shown; turns red + "⚠ close" if mark is <20% from liq
+- PnL shown in green (profit) or red (loss)
+- Link to jup.ag/perps
+
+### Capital allocation bar — 3 segments
+- **Before:** 2 segments — green (staked/earning) + amber (idle)
+- **After:** 3 segments — green (staked) | violet (perps collateral) | amber (idle)
+- Label updated: "Staked · Perps · Idle"
+- Breakdown tags: Staked (green), DeFi (green), JUP (green), Perps (violet + %), Idle (amber + %)
+- Logic: perp collateral is no longer bundled into "earning" — it's its own risk category
+
+### Starter screen — thumb zone (same session)
+- Connect wallet + address input moved to bottom of screen (fixed footer, not scrollable)
+- Feature list fills the top area
+- AI chip hidden until wallet/address loaded
+
+### Chart legend — Jupiter style
+- Two-column stacked: gray label on top, colored value below
+- No dot indicators — color differentiates Current path (yellow) vs With plan (green)
+
+---
+
 ## [2026-06-08] — Session 6: Explore page validator picker, AI picks, safety labels, stake detection fix
 
 ### Explore page — SOL staking tab with validator picker

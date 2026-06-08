@@ -23,6 +23,21 @@ export interface Token {
   usdValue: number;
 }
 
+export interface PerpPosition {
+  tokenMint: string;        // e.g. So111... = SOL
+  tokenSymbol: string;      // "SOL", "BTC", "ETH"
+  side: "long" | "short";
+  leverage: number;
+  entryPrice: number;
+  markPrice: number;
+  liquidationPrice: number;
+  collateralUsd: number;
+  sizeUsd: number;
+  pnlUsd: number;           // unrealized PnL
+  netValueUsd: number;      // collateral ± pnl
+  stopLoss: number | null;
+}
+
 export interface StakedJup {
   amount: number;          // JUP tokens staked (human-readable)
   usd: number;             // USD value at current price
@@ -45,6 +60,7 @@ export interface WalletData {
   otherUsd: number;
   idleStables: IdleStable[];
   stakedJup: StakedJup;
+  perpPositions: PerpPosition[];
   error?: string;
 }
 

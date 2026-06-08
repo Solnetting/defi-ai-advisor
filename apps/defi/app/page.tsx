@@ -268,10 +268,10 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
       {/* ── Scrollable content ───────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-5 pt-6 pb-2">
 
-        {/* Wallet bar */}
-        <div className="flex items-center justify-between mb-6">
-          <span className="text-sm text-gray-600">DeFi AI Advisor</span>
-          {connected && (
+        {/* Wallet bar — only visible when connected */}
+        {connected && (
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-sm text-gray-600">DeFi AI Advisor</span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSwapOpen(true)}
@@ -281,58 +281,24 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
               </button>
               <WalletButton />
             </div>
-          )}
-        </div>
-
-        {!connected && (
-          <div className="mb-6 space-y-4">
-            <button
-              onClick={() => setVisible(true)}
-              className="w-full bg-white text-black text-sm font-bold py-3.5 rounded-full hover:bg-gray-100 transition-colors"
-            >
-              Connect Wallet
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-gray-800" />
-              <span className="text-xs text-gray-600 shrink-0">or</span>
-              <div className="flex-1 h-px bg-gray-800" />
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-600 mb-2">Paste any Solana address</p>
-              <div className="flex items-center border border-gray-800 rounded-full pl-4 pr-1.5 py-1.5 bg-gray-950">
-                <input
-                  type="text"
-                  placeholder="e.g. 7xKX…"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && address.trim() && analyze()}
-                  className="flex-1 bg-transparent text-sm outline-none text-gray-300 placeholder-gray-700 min-w-0"
-                />
-                <button
-                  onClick={() => analyze()}
-                  disabled={!address.trim() || loading}
-                  className="shrink-0 ml-2 bg-white text-black text-xs font-bold px-4 py-2.5 rounded-full disabled:opacity-30 transition-all"
-                >
-                  {loading ? "…" : "Search"}
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
-        {/* Empty state — shown before any wallet or address is loaded */}
+        {/* Starter screen — feature list fills the scrollable area */}
         {!connected && !data && !loading && (
-          <div className="mt-4 space-y-5">
-            <div className="space-y-3">
+          <div className="flex flex-col pt-10 pb-4">
+            {/* Brand */}
+            <p className="text-[11px] text-gray-700 uppercase tracking-widest text-center mb-10">DeFi AI Advisor</p>
+
+            {/* Feature list */}
+            <div className="space-y-5">
               {[
                 { icon: "◈", label: "Full portfolio overview", desc: "SOL, staked, Kamino positions, tokens — all in one place" },
                 { icon: "◉", label: "AI advisor on your data", desc: "Ask about yields, risk, or \"what if SOL hits $500\"" },
                 { icon: "◎", label: "Growth projections", desc: "Scenario planning with live APY from DeFiLlama" },
                 { icon: "◐", label: "Best yield opportunities", desc: "Compare staking, lending, and liquidity options" },
               ].map(f => (
-                <div key={f.label} className="flex items-start gap-3 py-1">
+                <div key={f.label} className="flex items-start gap-3">
                   <span className="text-purple-600 text-base mt-0.5 shrink-0">{f.icon}</span>
                   <div>
                     <p className="text-sm text-gray-300">{f.label}</p>
@@ -341,7 +307,8 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-gray-800 text-center pt-2">Solana · read-only · no keys stored</p>
+
+            <p className="text-[10px] text-gray-800 text-center mt-10">Solana · read-only · no keys stored</p>
           </div>
         )}
 
@@ -628,38 +595,38 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                           <p className="px-5 pt-2 text-xs text-gray-600 leading-relaxed">{activePlan.detail}</p>
                         )}
 
-                        {/* ── Legend dots + timeframe ── */}
-                        <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                          <div className="flex items-center gap-4">
+                        {/* ── Legend (Jupiter-style: label above, colored value below) + timeframe ── */}
+                        <div className="flex items-end justify-between px-5 pt-4 pb-2">
+                          <div className="flex gap-5">
                             {isStablePlan ? (
                               <>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                                  <span className="text-xs text-gray-600">Idle <span className="text-yellow-400 font-medium tabular-nums">{fmtUSD(activePlan?.stableUsd ?? 0)}</span></span>
+                                <div>
+                                  <p className="text-[11px] text-gray-600 mb-0.5">Idle funds</p>
+                                  <p className="text-sm font-semibold text-yellow-400 tabular-nums">{fmtUSD(activePlan?.stableUsd ?? 0)}</p>
                                 </div>
                                 {showOptimized && (
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                                    <span className="text-xs text-gray-600">Plan <span className="text-green-400 font-medium tabular-nums">+{fmtUSD(gainOptimized)}</span></span>
+                                  <div>
+                                    <p className="text-[11px] text-gray-600 mb-0.5">With plan</p>
+                                    <p className="text-sm font-semibold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</p>
                                   </div>
                                 )}
                               </>
                             ) : (
                               <>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                                  <span className="text-xs text-gray-600">Current <span className="text-yellow-400 font-medium tabular-nums">+{fmtUSD(gainCurrent)}</span></span>
+                                <div>
+                                  <p className="text-[11px] text-gray-600 mb-0.5">Current path</p>
+                                  <p className="text-sm font-semibold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</p>
                                 </div>
                                 {showOptimized && (
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                                    <span className="text-xs text-gray-600">Plan <span className="text-green-400 font-medium tabular-nums">+{fmtUSD(gainOptimized)}</span></span>
+                                  <div>
+                                    <p className="text-[11px] text-gray-600 mb-0.5">With plan</p>
+                                    <p className="text-sm font-semibold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</p>
                                   </div>
                                 )}
                               </>
                             )}
                           </div>
-                          <div className="flex gap-3">
+                          <div className="flex gap-3 pb-0.5">
                             {(["1Y","3Y","5Y"] as const).map((tf) => (
                               <button key={tf} onClick={() => setTimeframe(tf)}
                                 className={`text-xs transition-colors ${timeframe === tf ? "text-white font-medium" : "text-gray-600 hover:text-gray-400"}`}>
@@ -795,10 +762,47 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
       </div>{/* end scrollable area */}
 
-      <ChatPanel
-        placeholder={inputPlaceholder}
-        onSend={handleChatSend}
-      />
+      {/* ── Starter entry — pinned to bottom, thumb-reachable ── */}
+      {!connected && !data && !loading && (
+        <div className="px-5 pb-5 pt-3 space-y-3 shrink-0">
+          <button
+            onClick={() => setVisible(true)}
+            className="w-full bg-white text-black text-sm font-bold py-3.5 rounded-full hover:bg-gray-100 transition-colors"
+          >
+            Connect Wallet
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-800" />
+            <span className="text-xs text-gray-600 shrink-0">or</span>
+            <div className="flex-1 h-px bg-gray-800" />
+          </div>
+          <div className="flex items-center border border-gray-800 rounded-full pl-4 pr-1.5 py-1.5 bg-gray-950">
+            <input
+              type="text"
+              placeholder="Paste any Solana address…"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && address.trim() && analyze()}
+              className="flex-1 bg-transparent text-sm outline-none text-gray-300 placeholder-gray-700 min-w-0"
+            />
+            <button
+              onClick={() => analyze()}
+              disabled={!address.trim()}
+              className="shrink-0 ml-2 bg-white text-black text-xs font-bold px-4 py-2.5 rounded-full disabled:opacity-30 transition-all"
+            >
+              Go
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI chip — only shown once wallet/address is loaded */}
+      {(connected || !!data) && (
+        <ChatPanel
+          placeholder={inputPlaceholder}
+          onSend={handleChatSend}
+        />
+      )}
 
       {stakeModalOpen && data && (
         <NativeStakeModal

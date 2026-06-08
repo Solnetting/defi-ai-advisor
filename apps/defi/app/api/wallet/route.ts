@@ -205,6 +205,49 @@ async function getStakedJUP(address: string): Promise<{ amount: number; usd: num
   }
 }
 
+const TOKEN_SYMBOL: Record<string, string> = {
+  "So11111111111111111111111111111111111111112": "SOL",
+  "3NZ9JMVXkeihGaKdEiF1jsHt5LEgkVRQQjJQ1zwsRpZT": "BTC",  // cbBTC — Jupiter Perps primary
+  "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": "BTC",  // wBTC legacy
+  "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs": "ETH",  // Wormhole wETH
+  "2FPyTwcZLUgFDPkudBcsbKDsHpQxNRtKFXJGTpq6BEfp": "ETH",  // allbridge ETH
+};
+
+async function getJupiterPerpPositions(address: string): Promise<import("../../../lib/types").PerpPosition[]> {
+  try {
+    const res = await fetch(`https://api.jup.ag/portfolio/v1/positions/${address}`, {
+      next: { revalidate: 30 },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const positions: import("../../../lib/types").PerpPosition[] = [];
+
+    for (const el of data.elements ?? []) {
+      if (el.type !== "leverage") continue;
+      for (const pos of el.data?.isolated?.positions ?? []) {
+        const mint: string = pos.address ?? "";
+        positions.push({
+          tokenMint: mint,
+          tokenSymbol: TOKEN_SYMBOL[mint] ?? mint.slice(0, 4),
+          side: pos.side === "short" ? "short" : "long",
+          leverage: Number(pos.leverage ?? 1),
+          entryPrice: Number(pos.entryPrice ?? 0),
+          markPrice: Number(pos.markPrice ?? 0),
+          liquidationPrice: Number(pos.liquidationPrice ?? 0),
+          collateralUsd: Number(pos.collateralValue ?? 0),
+          sizeUsd: Number(pos.sizeValue ?? 0),
+          pnlUsd: Number(pos.pnlValue ?? 0),
+          netValueUsd: Number(pos.value ?? 0),
+          stopLoss: pos.sl ? Number(pos.sl) : null,
+        });
+      }
+    }
+    return positions;
+  } catch {
+    return [];
+  }
+}
+
 async function getTokenBreakdown(
   tokens: { mint: string; amount: number; decimals: number }[]
 ): Promise<{ stableUsd: number; otherUsd: number; idleStables: IdleStable[]; priceMap: Record<string, number> }> {
@@ -256,12 +299,13 @@ export async function GET(req: NextRequest) {
   if (!address) return NextResponse.json({ error: "No address provided" }, { status: 400 });
 
   try {
-    const [balancesRes, stakedResult, solPriceData, kaminoPositions, stakedJup] = await Promise.all([
+    const [balancesRes, stakedResult, solPriceData, kaminoPositions, stakedJup, perpPositions] = await Promise.all([
       fetch(`${HELIUS_BASE}/addresses/${address}/balances?api-key=${HELIUS_API_KEY}`),
       getStakedSOL(address),
       getSolPrice(),
       getKaminoPositions(address),
       getStakedJUP(address),
+      getJupiterPerpPositions(address),
     ]);
     const stakedSOL = stakedResult.total;
     const stakeStatus = stakedResult.status;
@@ -350,6 +394,7 @@ export async function GET(req: NextRequest) {
       otherUsd: tokenBreakdown.otherUsd,
       idleStables: tokenBreakdown.idleStables,
       stakedJup,
+      perpPositions,
     });
   } catch {
     return NextResponse.json({ error: "Failed to fetch wallet data" }, { status: 500 });
