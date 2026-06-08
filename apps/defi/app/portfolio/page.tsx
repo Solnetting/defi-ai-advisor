@@ -150,44 +150,38 @@ export default function PortfolioPage() {
             <div className="space-y-4 pb-4">
 
               {/* ── Total value ── */}
-              <div className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-4 space-y-3">
+              <div className="pt-2 pb-4">
                 <p className="text-5xl font-bold tracking-tight">{fmtUSD(totalUsd)}</p>
-                <div className="space-y-1.5 pt-1">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
                   {data.stakedSOL > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Staked SOL</span>
-                      <span>{fmtSOL(data.stakedSOL)} SOL <span className="text-gray-600">· {fmtUSD(data.stakedSOL * data.solPrice)}</span></span>
-                    </div>
+                    <span className="text-xs text-gray-600">
+                      Staked <span className="text-gray-400">{fmtUSD(data.stakedSOL * data.solPrice)}</span>
+                    </span>
                   )}
                   {data.idleSOL > 0.001 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-yellow-700">Idle SOL</span>
-                      <span>{fmtSOL(data.idleSOL)} SOL <span className="text-gray-600">· {fmtUSD(data.idleSOL * data.solPrice)}</span></span>
-                    </div>
+                    <span className="text-xs text-yellow-800">
+                      Idle SOL <span className="text-yellow-700">{fmtUSD(data.idleSOL * data.solPrice)}</span>
+                    </span>
                   )}
                   {kaminoUsd > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">DeFi positions</span>
-                      <span>{fmtUSD(kaminoUsd)}</span>
-                    </div>
+                    <span className="text-xs text-gray-600">
+                      DeFi <span className="text-gray-400">{fmtUSD(kaminoUsd)}</span>
+                    </span>
                   )}
                   {(data.stakedJup?.usd ?? 0) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Staked JUP</span>
-                      <span>{fmtUSD(data.stakedJup.usd)}</span>
-                    </div>
+                    <span className="text-xs text-gray-600">
+                      JUP <span className="text-gray-400">{fmtUSD(data.stakedJup.usd)}</span>
+                    </span>
                   )}
                   {data.stableUsd > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Stablecoins</span>
-                      <span>{fmtUSD(data.stableUsd)}</span>
-                    </div>
+                    <span className="text-xs text-gray-600">
+                      Stables <span className="text-gray-400">{fmtUSD(data.stableUsd)}</span>
+                    </span>
                   )}
                   {data.otherUsd > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Other tokens</span>
-                      <span>{fmtUSD(data.otherUsd)}</span>
-                    </div>
+                    <span className="text-xs text-gray-600">
+                      Other <span className="text-gray-400">{fmtUSD(data.otherUsd)}</span>
+                    </span>
                   )}
                 </div>
               </div>
