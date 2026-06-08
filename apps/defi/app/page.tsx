@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import WalletButton from "./components/WalletButton";
 import NativeStakeModal from "./components/NativeStakeModal";
 import StableYieldModal from "./components/StableYieldModal";
@@ -66,6 +67,7 @@ interface WalletData {
   stableUsd: number;
   otherUsd: number;
   idleStables: IdleStable[];
+  stakedJup: { amount: number; usd: number; unstakingAmount: number; jupPrice: number };
   error?: string;
 }
 
@@ -77,7 +79,7 @@ function fmtSOL(sol: number): string {
   if (sol < 0.0001) return sol.toFixed(6);
   if (sol < 0.01) return sol.toFixed(4);
   if (sol < 1) return sol.toFixed(3);
-  return sol.toFixed(2);
+  return sol.toFixed(3);
 }
 function fmtUSD(usd: number): string {
   if (usd === 0) return "$0";
@@ -89,6 +91,7 @@ function fmtUSD(usd: number): string {
 
 export default function Home() {
   const { publicKey, connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const [address, setAddress] = useState("");
   const [data, setData] = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -162,7 +165,7 @@ useEffect(() => {
         const fRes = await fetch("/api/forecast", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q, currentPrice: data.solPrice, currentDate: now.toISOString().slice(0, 10) }),
+          body: JSON.stringify({ question: q, currentPrice: data.solPrice, currentDate: now.toISOString().slice(0, 10), currentSOL: projBase }),
         });
         const fResult = await fRes.json();
 
@@ -180,8 +183,12 @@ useEffect(() => {
             content = `At $${fResult.targetPrice.toLocaleString()}/SOL, your ${fmtSOL(projSOL)} staked SOL = ${fmtUSD(projSOL * fResult.targetPrice)}. Chart updated above.`;
           } else {
             const months = fResult.targetMonths;
-            const finalSOL = (projBase + months * fResult.solPerMonth) * Math.pow(1 + nativeAPY, months / 12);
-            content = `Adding ${fResult.solPerMonth} SOL/month for ${months} months → ${fmtSOL(finalSOL)} SOL · ${fmtUSD(finalSOL * data.solPrice)}. Chart updated above.`;
+            const finalSOL = Math.max(0, (projBase + months * fResult.solPerMonth) * Math.pow(1 + nativeAPY, months / 12));
+            const isSell = fResult.solPerMonth < 0;
+            const soldSOL = Math.abs(fResult.solPerMonth * months);
+            content = isSell
+              ? `Selling ~${fmtSOL(soldSOL)} SOL over ${months} months → ${fmtSOL(finalSOL)} SOL remaining · ${fmtUSD(finalSOL * data.solPrice)}. Chart updated above.`
+              : `Adding ${fResult.solPerMonth} SOL/month for ${months} months → ${fmtSOL(finalSOL)} SOL · ${fmtUSD(finalSOL * data.solPrice)}. Chart updated above.`;
           }
           return { role: "assistant", content, color: newScenario.color };
         }
@@ -222,6 +229,7 @@ Staked SOL: ${data.stakedSOL.toFixed(2)} SOL
 Idle SOL: ${data.idleSOL.toFixed(2)} SOL ($${(data.idleSOL * data.solPrice).toLocaleString()})
 Idle Stablecoins: ${idleStablesCtx || "None"}
 Kamino Positions: ${data.kaminoPositions.map((p) => `${p.name} (${p.type}): ${p.amountSOL.toFixed(2)} SOL / $${p.netValueUsd.toFixed(0)}${p.apy ? ` @ ${p.apy}% APY` : ""}`).join("; ") || "None"} · source: Kamino API
+Staked JUP: ${(data.stakedJup?.amount ?? 0) > 0.001 ? `${data.stakedJup.amount.toFixed(2)} JUP ($${data.stakedJup.usd.toFixed(0)}) locked in governance${data.stakedJup.unstakingAmount > 0.001 ? ` · ${data.stakedJup.unstakingAmount.toFixed(2)} JUP unstaking (7-day cooldown)` : ""}` : "None"} · source: Jupiter Portfolio API
 ## Market Data (source: CoinGecko · fetched ${fetchedAt})
 SOL Price: $${data.solPrice} (${data.solPrice24hChange >= 0 ? "+" : ""}${data.solPrice24hChange?.toFixed(2) ?? "0"}% 24h)
 ## Live Yields (source: DeFiLlama · fetched ${fetchedAt})
@@ -253,53 +261,119 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
   })();
 
   return (
-    <main className="flex-1 flex flex-col overflow-hidden min-h-0 relative">
+    <main className="flex-1 flex flex-col min-h-0 relative">
 
       {/* ── Scrollable content ───────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-5 pt-6 pb-2" style={{ paddingBottom: 296 }}>
+      <div className="flex-1 overflow-y-auto px-5 pt-6 pb-2">
 
         {/* Wallet bar */}
         <div className="flex items-center justify-between mb-6">
           <span className="text-sm text-gray-600">DeFi AI Advisor</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSwapOpen(true)}
-              className="text-xs text-gray-400 hover:text-white border border-gray-800 hover:border-gray-700 rounded-full px-3 py-1.5 transition-colors"
-            >
-              Swap
-            </button>
-            <WalletButton />
-          </div>
+          {connected && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSwapOpen(true)}
+                className="text-xs text-gray-400 hover:text-white border border-gray-800 hover:border-gray-700 rounded-full px-3 py-1.5 transition-colors"
+              >
+                Swap
+              </button>
+              <WalletButton />
+            </div>
+          )}
         </div>
 
         {!connected && (
-          <div className="flex gap-2 mb-6">
-            <input
-              type="text"
-              placeholder="Solana wallet address…"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && analyze()}
-              className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2 text-sm outline-none focus:border-gray-600"
-            />
+          <div className="mb-6 space-y-4">
             <button
-              onClick={() => analyze()}
-              disabled={loading}
-              className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              onClick={() => setVisible(true)}
+              className="w-full bg-white text-black text-sm font-bold py-3.5 rounded-full hover:bg-gray-100 transition-colors"
             >
-              {loading ? "…" : "Analyze"}
+              Connect Wallet
             </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-800" />
+              <span className="text-xs text-gray-600 shrink-0">or</span>
+              <div className="flex-1 h-px bg-gray-800" />
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-600 mb-2">Paste any Solana address</p>
+              <div className="flex items-center border border-gray-800 rounded-full pl-4 pr-1.5 py-1.5 bg-gray-950">
+                <input
+                  type="text"
+                  placeholder="e.g. 7xKX…"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && address.trim() && analyze()}
+                  className="flex-1 bg-transparent text-sm outline-none text-gray-300 placeholder-gray-700 min-w-0"
+                />
+                <button
+                  onClick={() => analyze()}
+                  disabled={!address.trim() || loading}
+                  className="shrink-0 ml-2 bg-white text-black text-xs font-bold px-4 py-2.5 rounded-full disabled:opacity-30 transition-all"
+                >
+                  {loading ? "…" : "Search"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {loading && <p className="text-gray-600 text-sm">Analyzing wallet…</p>}
+        {/* Empty state — shown before any wallet or address is loaded */}
+        {!connected && !data && !loading && (
+          <div className="mt-4 space-y-5">
+            <div className="space-y-3">
+              {[
+                { icon: "◈", label: "Full portfolio overview", desc: "SOL, staked, Kamino positions, tokens — all in one place" },
+                { icon: "◉", label: "AI advisor on your data", desc: "Ask about yields, risk, or \"what if SOL hits $500\"" },
+                { icon: "◎", label: "Growth projections", desc: "Scenario planning with live APY from DeFiLlama" },
+                { icon: "◐", label: "Best yield opportunities", desc: "Compare staking, lending, and liquidity options" },
+              ].map(f => (
+                <div key={f.label} className="flex items-start gap-3 py-1">
+                  <span className="text-purple-600 text-base mt-0.5 shrink-0">{f.icon}</span>
+                  <div>
+                    <p className="text-sm text-gray-300">{f.label}</p>
+                    <p className="text-xs text-gray-700 mt-0.5">{f.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-800 text-center pt-2">Solana · read-only · no keys stored</p>
+          </div>
+        )}
+
+        {loading && (
+          <div className="animate-pulse flex flex-col gap-4 pt-2">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-purple-600 text-xs">✦</span>
+              <span className="text-xs text-purple-700">AI Analyzing wallet…</span>
+            </div>
+            {/* Hero value */}
+            <div className="space-y-2.5">
+              <div className="h-12 w-40 bg-gray-900 rounded-lg" />
+              <div className="h-4 w-32 bg-gray-900 rounded-full" />
+              <div className="h-7 w-36 bg-gray-900 rounded-full" />
+            </div>
+            {/* Plan card */}
+            <div className="mt-2 bg-gray-950 border border-gray-800 rounded-2xl p-5 space-y-3">
+              <div className="h-3 w-16 bg-gray-800 rounded" />
+              <div className="h-5 w-48 bg-gray-800 rounded" />
+              <div className="h-8 w-24 bg-gray-800 rounded" />
+              <div className="h-3 w-32 bg-gray-800 rounded" />
+              <div className="mt-4 h-36 bg-gray-900 rounded-xl" />
+              <div className="h-12 bg-gray-800 rounded-full" />
+            </div>
+          </div>
+        )}
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
         {data && (() => {
           // ── Core values ──────────────────────────────────────────────
           const kaminoUsd = data.kaminoPositions.reduce((s, p) => s + p.netValueUsd, 0);
           const nativeSolUsd = (data.idleSOL + data.stakedSOL) * data.solPrice;
-          const totalUsd = nativeSolUsd + kaminoUsd + data.stableUsd + data.otherUsd;
+          const jupStakedUsd = (data.stakedJup?.usd ?? 0) + (data.stakedJup?.unstakingAmount ?? 0) * (data.stakedJup?.jupPrice ?? 0);
+          const totalUsd = nativeSolUsd + kaminoUsd + data.stableUsd + data.otherUsd + jupStakedUsd;
           const change24hUsd = totalUsd * ((data.solPrice24hChange ?? 0) / 100);
           const bestNativeAPY = yields.find((y) => y.label === "Native Staking")?.apy ?? 5.65;
           const yearlyIdleUsd = data.idleSOL * (bestNativeAPY / 100) * data.solPrice;
@@ -309,7 +383,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           const RISK_WEIGHTS: Record<string, number> = { multiply: 1.0, liquidity: 0.6, lending: 0.5, earn: 0.3 };
           let protocolSum = 0;
           for (const p of data.kaminoPositions) protocolSum += p.netValueUsd * (RISK_WEIGHTS[p.type] ?? 0.3);
-          protocolSum += data.stakedSOL * data.solPrice * 0.1 + data.idleSOL * data.solPrice * 0.05 + data.stableUsd * 0.02 + data.otherUsd * 0.15;
+          protocolSum += data.stakedSOL * data.solPrice * 0.1 + data.idleSOL * data.solPrice * 0.05 + data.stableUsd * 0.02 + data.otherUsd * 0.15 + jupStakedUsd * 0.15;
           const protocolScore = totalUsd > 0 ? Math.min(100, Math.round((protocolSum / totalUsd) * 100)) : 0;
           const hasLeverage = data.kaminoPositions.some((p) => p.type === "multiply");
           const leverageUsdAmt = data.kaminoPositions.filter((p) => p.type === "multiply").reduce((s, p) => s + p.netValueUsd, 0);
@@ -382,6 +456,18 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
             });
           }
 
+          // Always show at least one plan so the card never appears empty
+          if (plans.length === 0) {
+            plans.push({
+              title: "Portfolio fully deployed",
+              impact: "+0 idle assets",
+              impactUsd: 0,
+              detail: "All your SOL is staked or earning. Ask the AI for advanced rebalancing ideas.",
+              onCta: () => {},
+              chartType: "sol",
+            });
+          }
+
           const planIdx = Math.min(currentPlanIndex, Math.max(0, plans.length - 1));
           const activePlan = plans[planIdx];
 
@@ -399,11 +485,12 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           const chartData = Array.from({ length: totalPoints + 1 }, (_, m) => {
             const yr = m / 12;
             if (isStablePlan && activePlan.stableUsd != null && activePlan.stableApy != null) {
-              // Stable idle stays flat; deployed compounds — same start point
+              // No rounding — Math.round on small amounts creates a step function
+              // that cubic spline interpolation then overshoots into a visible spike
               return {
                 m,
-                current: Math.round(activePlan.stableUsd),
-                optimized: Math.round(activePlan.stableUsd * Math.pow(1 + activePlan.stableApy / 100, yr)),
+                current: activePlan.stableUsd,
+                optimized: activePlan.stableUsd * Math.pow(1 + activePlan.stableApy / 100, yr),
               };
             }
             // Current path: deployed SOL grows at APY, idle SOL stays flat (does nothing)
@@ -483,7 +570,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
                         {/* ── Plan label + arrows ── */}
                         <div className="flex items-center justify-between px-5 pt-5 pb-1">
-                          <p className="text-[10px] text-yellow-500 uppercase tracking-widest font-bold">
+                          <p className="text-xs text-yellow-500 uppercase tracking-widest font-bold">
                             Plan {planIdx + 1}{plans.length > 1 ? ` of ${plans.length}` : ""}
                           </p>
                           {plans.length > 1 && (
@@ -503,7 +590,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
                         {/* ── Hero impact number ── */}
                         {activePlan && (
-                          <p className="px-5 pt-2 text-3xl font-bold text-green-400 tracking-tight leading-none">
+                          <p className="px-5 pt-2 text-2xl font-bold text-green-400 tracking-tight leading-none">
                             {activePlan.impact}
                           </p>
                         )}
@@ -525,15 +612,32 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         {/* ── Legend dots + timeframe ── */}
                         <div className="flex items-center justify-between px-5 pt-4 pb-2">
                           <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                              <span className="text-sm font-bold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</span>
-                            </div>
-                            {showOptimized && (
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2 h-2 rounded-full bg-green-400" />
-                                <span className="text-sm font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
-                              </div>
+                            {isStablePlan ? (
+                              <>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                                  <span className="text-sm font-bold text-yellow-400 tabular-nums">Idle {fmtUSD(activePlan?.stableUsd ?? 0)}</span>
+                                </div>
+                                {showOptimized && (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                                    <span className="text-sm font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                                  <span className="text-sm font-bold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</span>
+                                </div>
+                                {showOptimized && (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                                    <span className="text-sm font-bold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</span>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                           <div className="flex gap-3">
@@ -548,30 +652,26 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
                         {/* ── Scenario chips ── */}
                         {!isStablePlan && forecastScenarios.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 px-5 pb-3">
-                            {forecastScenarios.map((s) => {
-                              const lastVal = lastPoint[`s_${s.id}`] ?? 0;
-                              return (
-                                <div key={s.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
-                                  style={{ background: `${s.color}12`, border: `1px solid ${s.color}35`, color: s.color }}>
-                                  <span className="inline-flex items-center justify-center rounded-full shrink-0"
-                                    style={{ width: 16, height: 16, border: `1px solid currentColor`, opacity: 0.8 }}>
-                                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                                      <polyline points="0,6.5 2,4 4.5,5.5 7,1.5 9,0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  </span>
-                                  <span>{s.label}</span>
-                                  <span style={{ opacity: 0.55 }}>→ {fmtUSD(lastVal)}</span>
-                                  <button onClick={() => setForecastScenarios((prev) => prev.filter((x) => x.id !== s.id))}
-                                    className="opacity-40 hover:opacity-70 leading-none">✕</button>
-                                </div>
-                              );
-                            })}
+                          <div className="flex flex-row flex-wrap gap-1.5 px-5 pb-3">
+                            {forecastScenarios.map((s) => (
+                              <div key={s.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
+                                style={{ background: `${s.color}12`, border: `1px solid ${s.color}35`, color: s.color }}>
+                                <span className="inline-flex items-center justify-center rounded-full shrink-0"
+                                  style={{ width: 14, height: 14, border: `1px solid currentColor`, opacity: 0.8 }}>
+                                  <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                    <polyline points="0,6.5 2,4 4.5,5.5 7,1.5 9,0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </span>
+                                <span className="whitespace-nowrap">{s.label}</span>
+                                <button onClick={() => setForecastScenarios((prev) => prev.filter((x) => x.id !== s.id))}
+                                  className="opacity-40 hover:opacity-70 leading-none ml-0.5">✕</button>
+                              </div>
+                            ))}
                           </div>
                         )}
 
                         {/* ── Chart: full-bleed ── */}
-                        <ResponsiveContainer width="100%" height={180}>
+                        <ResponsiveContainer width="100%" height={140}>
                           <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                             <defs>
                               <linearGradient id="gradCurrent" x1="0" y1="0" x2="0" y2="1">
@@ -676,8 +776,6 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
       </div>{/* end scrollable area */}
 
       <ChatPanel
-        mode="overlay"
-        bottomOffset={116}
         placeholder={inputPlaceholder}
         onSend={handleChatSend}
       />

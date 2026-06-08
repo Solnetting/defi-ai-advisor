@@ -4,6 +4,23 @@ All notable changes to DeFi AI Advisor are documented here.
 
 ---
 
+## Micro-interactions — Loading & Success States (2026-06-08)
+
+### Skeleton loading screens
+- Home page: shimmer skeleton mirrors hero value + plan card layout while wallet data fetches (2–5s)
+- Portfolio page: shimmer skeleton mirrors value card + risk card + assets list
+- Both show "✦ AI Analyzing…" label so the wait feels intentional, not broken
+
+### AI typing dots
+- ChatPanel and FreeformChip: replaced "Thinking…" text with 3 purple bouncing dots (staggered animation, 1.2s loop)
+
+### Staking success animation (Revolut-style)
+- NativeStakeModal success state: animated SVG circle draws in (0.55s) then checkmark draws in (0.35s)
+- Full panel scales in with spring easing
+- Clean layout: icon → "Staked successfully" → validator name → Solscan link → Done button
+
+---
+
 ## Business Ideas & Revenue Model
 
 ### Swap fees (Jupiter) — DECISION PENDING
@@ -47,6 +64,55 @@ All notable changes to DeFi AI Advisor are documented here.
 - Validate wallet address as valid Solana pubkey before passing to Helius
 - User fund risk: near zero (all movements require wallet signature in Phantom)
 - API cost abuse risk: HIGH without rate limiting
+
+---
+
+## [2026-06-06] — Session 5: Chat input redesign + sell scenarios + DS hard stops + layout fixes
+
+### Unified wallet entry (unconnected state)
+- Removed separate "Connect Wallet" button + address input as two independent entry points
+- Single pill input: placeholder "Paste any Solana address…" with nested pill button
+- Button switches: "Connect" (empty input → opens wallet modal) / "Go" (typing → analyze address)
+- Top bar hides Swap + WalletButton when not connected — one entry point only
+
+### Chat input redesign (DS-compliant)
+- Outer: purple-bordered pill (`border-purple-700/40`, brightens on focus)
+- ✦ icon: `text-purple-700` resting / `text-purple-400` focused (AI surface, per DS rules)
+- "Ask" button: nested inside right end of pill, `bg-purple-700` (NOT white — white = primary CTA only, this rule now in hard_stops.md)
+- Always visible regardless of focus state — no conditional show/hide
+
+### Scenario pill redesign
+- Removed `→ $price` from each pill (price shown in chat log)
+- Pills now compact: `{icon} {label} ✕` only
+- `flex-row flex-wrap` layout — stack horizontally, wrap to next row if needed
+
+### Sell scenarios in AI chart
+- `/api/forecast` now classifies sell questions as negative contribution (`solPerMonth < 0`)
+- `currentSOL` passed from chat handler so LLM can calculate "half" correctly
+- Chart formula already handles negative contributions naturally (line goes down then flattens)
+- Reply text: "Selling ~X SOL over N months → Y SOL remaining · $Z"
+- Sell label example: "sell half in 3mo"
+
+### Chart tooltip color dots
+- Replaced `formatter`-based tooltip with custom `content` renderer
+- Each tooltip row: colored circle + label + value
+- Yellow (#fbbf24) = Current path, Green (#4ade80) = With plan, scenario colors for forecasts
+- Both lines always shown regardless of value equality (hard rule, locked in memory)
+
+### Layout — chat chip overflow fix
+- Removed `overflow-hidden` from `<main>` — the chip was being clipped at the bottom
+- Scrollable div has its own `overflow-y-auto` — main doesn't need to clip it
+
+### Design system hard stops (saved to memory)
+- Chart: never change without Carlos's approval
+- Tooltip: never suppress any entry regardless of value
+- White = one primary CTA only ("Review plan →"), never a second white button
+- Purple = AI surfaces only (✦, chat border, Ask button)
+- Vercel: local-only unless Carlos explicitly says deploy
+
+### Bug fixes
+- `lightningcss-darwin-arm64` native binary missing after `vercel build` polluted workspace; fixed by reinstalling from repo root + clearing .next cache
+- `@tailwindcss/postcss` missing (same root cause); reinstalled via workspace root npm install
 
 ---
 

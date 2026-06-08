@@ -39,6 +39,7 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
   const [txSig, setTxSig] = useState("");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [showCriteria, setShowCriteria] = useState(false);
 
   useEffect(() => {
     fetch("https://api.stakewiz.com/validators")
@@ -51,6 +52,14 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
         setValidators(filtered);
       });
   }, []);
+
+  // Score: vote reliability × fee efficiency × wiz quality × Jito MEV bonus
+  function validatorScore(v: Validator): number {
+    return (v.vote_success / 100) * ((100 - v.commission) / 100) * (v.wiz_score / 100) * (v.is_jito ? 1.05 : 1);
+  }
+  const aiPick = validators.length > 0
+    ? validators.reduce((best, v) => validatorScore(v) > validatorScore(best) ? v : best)
+    : null;
 
   const filtered = validators.filter((v) =>
     v.name?.toLowerCase().includes(search.toLowerCase())
@@ -102,35 +111,101 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
       <div className="absolute inset-0 bg-black/80" onClick={onClose} />
       <div className="relative bg-gray-950 border border-gray-700 rounded-xl w-full max-w-[358px]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <h2 className="font-semibold">Native Staking — Pick a Validator</h2>
+          <h2 className="font-semibold">Native Staking</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
         </div>
 
         {status === "success" ? (
-          <div className="p-6 text-center space-y-3">
-            <p className="text-green-400 text-lg font-bold">Staked successfully</p>
-            <p className="text-gray-400 text-sm">Your SOL is now delegated to {selected?.name}</p>
+          <div
+            className="p-8 flex flex-col items-center gap-5"
+            style={{ animation: "scale-in 0.35s cubic-bezier(0.34,1.56,0.64,1) both" }}
+          >
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+              <circle
+                cx="40" cy="40" r="26"
+                stroke="#4ade80"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="164"
+                strokeDashoffset="164"
+                strokeLinecap="round"
+                style={{ animation: "draw-circle 0.55s ease-out 0.1s both" }}
+              />
+              <path
+                d="M 22 40 L 33 51 L 58 27"
+                stroke="#4ade80"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+                strokeDasharray="52"
+                strokeDashoffset="52"
+                style={{ animation: "draw-check 0.35s ease-out 0.55s both" }}
+              />
+            </svg>
+            <div className="text-center space-y-1.5">
+              <p className="text-white text-lg font-bold">Staked successfully</p>
+              <p className="text-gray-500 text-sm">Delegated to {selected?.name}</p>
+            </div>
             <a
               href={`https://solscan.io/tx/${txSig}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-purple-400 text-xs hover:text-purple-300"
+              className="text-purple-400 text-xs hover:text-purple-300 transition-colors"
             >
               View on Solscan ↗
             </a>
-            <button onClick={onClose} className="block w-full mt-4 bg-white text-black py-2 rounded text-sm font-medium">Done</button>
+            <button
+              onClick={onClose}
+              className="w-full bg-white text-black py-3.5 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors"
+            >
+              Done
+            </button>
           </div>
         ) : (
           <div className="p-4 space-y-4">
+
+            {/* ✦ AI Pick validator */}
+            {aiPick && (
+              <div
+                onClick={() => setSelected(aiPick)}
+                className={`cursor-pointer bg-purple-950/40 border rounded-xl px-4 py-3 transition-colors ${selected?.vote_identity === aiPick.vote_identity ? "border-purple-500" : "border-purple-800/50 hover:border-purple-700/60"}`}
+              >
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-purple-400 text-xs">✦</span>
+                  <span className="text-purple-400 text-xs font-medium uppercase tracking-wide">AI Pick</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowCriteria(s => !s); }}
+                    className="text-purple-400/50 hover:text-purple-400 text-xs leading-none transition-colors"
+                    aria-label="How was this picked?"
+                  >ⓘ</button>
+                </div>
+                {showCriteria && (
+                  <p className="text-[10px] text-gray-500 leading-relaxed mb-2">
+                    Picks the most reliable validator — scored by uptime, low commission, and overall quality. Jito validators get a small bonus for MEV rewards.
+                  </p>
+                )}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{aiPick.name || aiPick.vote_identity.slice(0, 12) + "…"}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {aiPick.commission}% fee · Score {aiPick.wiz_score.toFixed(0)}{aiPick.is_jito ? " · Jito MEV" : ""}
+                    </p>
+                  </div>
+                  <span className="text-xs text-green-400">{aiPick.vote_success.toFixed(1)}% uptime</span>
+                </div>
+              </div>
+            )}
+
             <input
               type="text"
-              placeholder="Search validators..."
+              placeholder="Or search all validators…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm outline-none focus:border-gray-500"
             />
 
-            <div className="space-y-1 max-h-52 overflow-y-auto">
+            <div className="space-y-1 max-h-44 overflow-y-auto">
               {filtered.length === 0 && <p className="text-gray-500 text-sm text-center py-4">Loading validators...</p>}
               {filtered.map((v) => (
                 <button

@@ -98,7 +98,15 @@ export default function FreeformChip({ context = "", placeholder = "Ask about yo
                   <polyline points="0,7 2.5,4 5,5.5 7.5,1.5 10,0.5" stroke="#a855f7" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <div className="bg-gray-900 text-gray-600 text-xs px-3 py-2.5 rounded-xl">Thinking…</div>
+              <div className="bg-gray-900 px-3 py-3 rounded-xl flex items-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"
+                    style={{ animation: `typing-dot 1.2s ease-in-out ${i * 0.18}s infinite` }}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
