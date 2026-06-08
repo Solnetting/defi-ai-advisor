@@ -69,7 +69,6 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(false);
   const [showAllTokens, setShowAllTokens] = useState(false);
   const [riskOpen, setRiskOpen] = useState(false);
-  const [effOpen, setEffOpen] = useState(false);
 
   useEffect(() => {
     const address = publicKey?.toString() ?? (typeof window !== "undefined" ? localStorage.getItem("lastAddress") : null);
@@ -143,8 +142,6 @@ export default function PortfolioPage() {
           const { totalUsd, protocolScore, concentrationScore, derivativesScore, opportunityScore, riskScore, riskLabel, riskColor } = computeRisk(data);
           const kaminoUsd = data.kaminoPositions.reduce((s, p) => s + p.netValueUsd, 0);
           const nativeSolUsd = (data.idleSOL + data.stakedSOL) * data.solPrice;
-          const effScore = Math.max(0, 100 - riskScore);
-          const effLabel = effScore >= 80 ? "Excellent" : effScore >= 60 ? "Good" : effScore >= 40 ? "Fair" : "Low";
 
           return (
             <div className="space-y-4 pb-4">
@@ -233,25 +230,44 @@ export default function PortfolioPage() {
                 )}
               </div>
 
-              {/* ── Efficiency (collapsible) ── */}
-              <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setEffOpen(o => !o)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left"
-                >
-                  <span className="text-sm font-semibold">Efficiency</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-white">{effScore}/100 · {effLabel}</span>
-                    <span className="text-gray-600 text-xs">{effOpen ? "↑" : "↓"}</span>
+              {/* ── Deployment bar ── */}
+              {(() => {
+                const idleStableUsd = (data.idleStables ?? []).reduce((s, x) => s + x.usd, 0);
+                const earningUsd = data.stakedSOL * data.solPrice + kaminoUsd + (data.stakedJup?.usd ?? 0) + (data.stableUsd - idleStableUsd);
+                const idleUsd = data.idleSOL * data.solPrice + idleStableUsd;
+                const t = totalUsd || 1;
+                const earningPct = Math.round((earningUsd / t) * 100);
+                const idlePct = Math.round((idleUsd / t) * 100);
+
+                return (
+                  <div className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Capital at work</span>
+                      <span className="text-xs text-gray-600">{earningPct}% earning</span>
+                    </div>
+                    <div className="relative h-2 rounded-full overflow-hidden bg-gray-900">
+                      <div className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full transition-all"
+                        style={{ width: `${earningPct}%` }} />
+                      {idlePct > 0 && (
+                        <div className="absolute top-0 h-full bg-amber-500 transition-all"
+                          style={{ left: `${earningPct}%`, width: `${idlePct}%` }} />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        <span className="text-xs text-gray-600">Earning <span className="text-gray-400">{earningPct}%</span></span>
+                      </div>
+                      {idlePct > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span className="text-xs text-gray-600">Idle <span className="text-amber-600">{idlePct}%</span></span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </button>
-                {effOpen && (
-                  <div className="border-t border-gray-900 px-4 py-3">
-                    <p className="text-xs text-gray-600 leading-relaxed">
-                      100 minus risk score. Measures how much of your portfolio is actively earning vs. sitting idle or in high-risk positions. Higher is better.
-                    </p>
-                  </div>
-                )}
+                );
+              })()}
               </div>
 
               {/* ── Assets (unified — SOL + positions + all tokens) ── */}
