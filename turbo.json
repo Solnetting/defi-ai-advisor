@@ -7,7 +7,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "storybook-static/**"]
+      "outputs": [".next/**", "storybook-static/**"],
+      "env": ["GROQ_API_KEY", "HELIUS_API_KEY"]
     },
     "storybook": {
       "persistent": true,
