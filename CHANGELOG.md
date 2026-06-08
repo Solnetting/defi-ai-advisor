@@ -4,6 +4,23 @@ All notable changes to DeFi AI Advisor are documented here.
 
 ---
 
+## Typography + Portfolio layout (2026-06-08)
+
+### Font: Space Mono → Geist Sans
+- Switched global typeface from Space Mono (monospace/terminal) to Geist Sans (Vercel's grotesque)
+- Decision: fintech 2026 polish direction; Carlos compared and kept Geist
+
+### Portfolio screen — Capital at work inline
+- Removed standalone "Capital at work" card
+- Deployment bar (green = earning, amber = idle) now lives directly below the total value, no capsule
+- Breakdown labels (Staked · DeFi · JUP · Stables · Idle SOL %) flow inline under the bar
+- Section order: total value → deployment bar → Risk Analysis → Assets
+
+### Plans tab rename
+- Bottom nav "Home" → "Plans"
+
+---
+
 ## Micro-interactions — Loading & Success States (2026-06-08)
 
 ### Skeleton loading screens

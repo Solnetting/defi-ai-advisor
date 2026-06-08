@@ -146,42 +146,54 @@ export default function PortfolioPage() {
           return (
             <div className="space-y-4 pb-4">
 
-              {/* ── Total value ── */}
-              <div className="pt-2 pb-4">
-                <p className="text-5xl font-bold tracking-tight">{fmtUSD(totalUsd)}</p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                  {data.stakedSOL > 0 && (
-                    <span className="text-xs text-gray-600">
-                      Staked <span className="text-gray-400">{fmtUSD(data.stakedSOL * data.solPrice)}</span>
-                    </span>
-                  )}
-                  {data.idleSOL > 0.001 && (
-                    <span className="text-xs text-yellow-800">
-                      Idle SOL <span className="text-yellow-700">{fmtUSD(data.idleSOL * data.solPrice)}</span>
-                    </span>
-                  )}
-                  {kaminoUsd > 0 && (
-                    <span className="text-xs text-gray-600">
-                      DeFi <span className="text-gray-400">{fmtUSD(kaminoUsd)}</span>
-                    </span>
-                  )}
-                  {(data.stakedJup?.usd ?? 0) > 0 && (
-                    <span className="text-xs text-gray-600">
-                      JUP <span className="text-gray-400">{fmtUSD(data.stakedJup.usd)}</span>
-                    </span>
-                  )}
-                  {data.stableUsd > 0 && (
-                    <span className="text-xs text-gray-600">
-                      Stables <span className="text-gray-400">{fmtUSD(data.stableUsd)}</span>
-                    </span>
-                  )}
-                  {data.otherUsd > 0 && (
-                    <span className="text-xs text-gray-600">
-                      Other <span className="text-gray-400">{fmtUSD(data.otherUsd)}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
+              {/* ── Total value + deployment bar ── */}
+              {(() => {
+                const idleStableUsd = (data.idleStables ?? []).reduce((s, x) => s + x.usd, 0);
+                const earningUsd = data.stakedSOL * data.solPrice + kaminoUsd + (data.stakedJup?.usd ?? 0) + (data.stableUsd - idleStableUsd);
+                const idleUsd = data.idleSOL * data.solPrice + idleStableUsd;
+                const t = totalUsd || 1;
+                const earningPct = (earningUsd / t) * 100;
+                const idlePct = (idleUsd / t) * 100;
+                const fmt = (p: number) => p < 1 ? "<1%" : `${Math.round(p)}%`;
+                const hasIdle = idleUsd > 0;
+                return (
+                  <div className="pt-2 pb-5 space-y-3">
+                    <p className="text-5xl font-bold tracking-tight">{fmtUSD(totalUsd)}</p>
+
+                    {/* Deployment bar */}
+                    <div className="space-y-1.5">
+                      <div className="relative h-1.5 rounded-full overflow-hidden bg-gray-900">
+                        <div className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full"
+                          style={{ width: `${earningPct}%` }} />
+                        {hasIdle && (
+                          <div className="absolute top-0 h-full bg-amber-500"
+                            style={{ left: `${earningPct}%`, width: `${Math.max(idlePct, 1.5)}%` }} />
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        {data.stakedSOL > 0 && (
+                          <span className="text-xs text-gray-600">Staked <span className="text-gray-400">{fmtUSD(data.stakedSOL * data.solPrice)}</span></span>
+                        )}
+                        {kaminoUsd > 0 && (
+                          <span className="text-xs text-gray-600">DeFi <span className="text-gray-400">{fmtUSD(kaminoUsd)}</span></span>
+                        )}
+                        {(data.stakedJup?.usd ?? 0) > 0 && (
+                          <span className="text-xs text-gray-600">JUP <span className="text-gray-400">{fmtUSD(data.stakedJup.usd)}</span></span>
+                        )}
+                        {data.stableUsd > 0 && (
+                          <span className="text-xs text-gray-600">Stables <span className="text-gray-400">{fmtUSD(data.stableUsd)}</span></span>
+                        )}
+                        {data.otherUsd > 0 && (
+                          <span className="text-xs text-gray-600">Other <span className="text-gray-400">{fmtUSD(data.otherUsd)}</span></span>
+                        )}
+                        {data.idleSOL > 0.001 && (
+                          <span className="text-xs text-amber-800">Idle SOL <span className="text-amber-700">{fmtUSD(data.idleSOL * data.solPrice)} · {fmt(idlePct)}</span></span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── Risk analysis (collapsible) ── */}
               <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
@@ -230,46 +242,6 @@ export default function PortfolioPage() {
                 )}
               </div>
 
-              {/* ── Deployment bar ── */}
-              {(() => {
-                const idleStableUsd = (data.idleStables ?? []).reduce((s, x) => s + x.usd, 0);
-                const earningUsd = data.stakedSOL * data.solPrice + kaminoUsd + (data.stakedJup?.usd ?? 0) + (data.stableUsd - idleStableUsd);
-                const idleUsd = data.idleSOL * data.solPrice + idleStableUsd;
-                const t = totalUsd || 1;
-                const earningPct = (earningUsd / t) * 100;
-                const idlePct = (idleUsd / t) * 100;
-                const fmt = (p: number) => p < 1 ? "<1%" : `${Math.round(p)}%`;
-                const hasIdle = idleUsd > 0;
-
-                return (
-                  <div className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">Capital at work</span>
-                      <span className="text-xs text-gray-600">{fmt(earningPct)} earning</span>
-                    </div>
-                    <div className="relative h-2 rounded-full overflow-hidden bg-gray-900">
-                      <div className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full transition-all"
-                        style={{ width: `${earningPct}%` }} />
-                      {hasIdle && (
-                        <div className="absolute top-0 h-full bg-amber-500 transition-all"
-                          style={{ left: `${earningPct}%`, width: `${Math.max(idlePct, 1.5)}%` }} />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        <span className="text-xs text-gray-600">Earning <span className="text-gray-400">{fmt(earningPct)}</span></span>
-                      </div>
-                      {hasIdle && (
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          <span className="text-xs text-gray-600">Idle <span className="text-amber-600">{fmt(idlePct)}</span></span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
 
               {/* ── Assets (unified — SOL + positions + all tokens) ── */}
               {(() => {
