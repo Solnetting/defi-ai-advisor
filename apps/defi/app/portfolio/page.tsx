@@ -236,32 +236,34 @@ export default function PortfolioPage() {
                 const earningUsd = data.stakedSOL * data.solPrice + kaminoUsd + (data.stakedJup?.usd ?? 0) + (data.stableUsd - idleStableUsd);
                 const idleUsd = data.idleSOL * data.solPrice + idleStableUsd;
                 const t = totalUsd || 1;
-                const earningPct = Math.round((earningUsd / t) * 100);
-                const idlePct = Math.round((idleUsd / t) * 100);
+                const earningPct = (earningUsd / t) * 100;
+                const idlePct = (idleUsd / t) * 100;
+                const fmt = (p: number) => p < 1 ? "<1%" : `${Math.round(p)}%`;
+                const hasIdle = idleUsd > 0;
 
                 return (
                   <div className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold">Capital at work</span>
-                      <span className="text-xs text-gray-600">{earningPct}% earning</span>
+                      <span className="text-xs text-gray-600">{fmt(earningPct)} earning</span>
                     </div>
                     <div className="relative h-2 rounded-full overflow-hidden bg-gray-900">
                       <div className="absolute left-0 top-0 h-full bg-green-500 rounded-l-full transition-all"
                         style={{ width: `${earningPct}%` }} />
-                      {idlePct > 0 && (
+                      {hasIdle && (
                         <div className="absolute top-0 h-full bg-amber-500 transition-all"
-                          style={{ left: `${earningPct}%`, width: `${idlePct}%` }} />
+                          style={{ left: `${earningPct}%`, width: `${Math.max(idlePct, 1.5)}%` }} />
                       )}
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
                         <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        <span className="text-xs text-gray-600">Earning <span className="text-gray-400">{earningPct}%</span></span>
+                        <span className="text-xs text-gray-600">Earning <span className="text-gray-400">{fmt(earningPct)}</span></span>
                       </div>
-                      {idlePct > 0 && (
+                      {hasIdle && (
                         <div className="flex items-center gap-1.5">
                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          <span className="text-xs text-gray-600">Idle <span className="text-amber-600">{idlePct}%</span></span>
+                          <span className="text-xs text-gray-600">Idle <span className="text-amber-600">{fmt(idlePct)}</span></span>
                         </div>
                       )}
                     </div>
