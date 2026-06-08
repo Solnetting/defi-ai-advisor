@@ -213,14 +213,14 @@ const TOKEN_SYMBOL: Record<string, string> = {
   "2FPyTwcZLUgFDPkudBcsbKDsHpQxNRtKFXJGTpq6BEfp": "ETH",  // allbridge ETH
 };
 
-async function getJupiterPerpPositions(address: string): Promise<import("../../../lib/types").PerpPosition[]> {
+async function getJupiterPerpPositions(address: string): Promise<import("../../lib/types").PerpPosition[]> {
   try {
     const res = await fetch(`https://api.jup.ag/portfolio/v1/positions/${address}`, {
       next: { revalidate: 30 },
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const positions: import("../../../lib/types").PerpPosition[] = [];
+    const positions: import("../../lib/types").PerpPosition[] = [];
 
     for (const el of data.elements ?? []) {
       if (el.type !== "leverage") continue;
