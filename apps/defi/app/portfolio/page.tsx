@@ -272,8 +272,18 @@ export default function PortfolioPage() {
                         const totalSOL = data.stakedSOL + data.idleSOL;
                         return (
                           <div className="px-4 py-3">
-                            <div className="flex items-start justify-between">
-                              <p className="text-sm font-medium">SOL</p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                                  <img
+                                    src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+                                    alt="SOL"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                </div>
+                                <p className="text-sm font-medium">SOL</p>
+                              </div>
                               <div className="text-right">
                                 <p className="text-sm font-medium">{fmtSOL(totalSOL)} SOL</p>
                                 <p className="text-xs text-gray-600">{fmtUSD(totalSOL * data.solPrice)}</p>
@@ -326,13 +336,23 @@ export default function PortfolioPage() {
 
                       {/* Staked JUP */}
                       {(data.stakedJup?.amount ?? 0) > 0.001 && (
-                        <div className="flex items-center justify-between px-4 py-3">
-                          <div>
-                            <p className="text-sm font-medium">JUP</p>
-                            <p className="text-xs text-gray-600 mt-0.5">
-                              Governance ·{" "}
-                              <a href="https://vote.jup.ag" target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-400">vote.jup.ag ↗</a>
-                            </p>
+                        <div className="flex items-center justify-between px-4 py-3 gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                              <img
+                                src="https://static.jup.ag/jup/icon.png"
+                                alt="JUP"
+                                className="w-full h-full object-cover"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">JUP</p>
+                              <p className="text-xs text-gray-600 mt-0.5">
+                                Governance ·{" "}
+                                <a href="https://vote.jup.ag" target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-400">vote.jup.ag ↗</a>
+                              </p>
+                            </div>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-medium">{data.stakedJup.amount.toFixed(2)} JUP</p>
@@ -343,10 +363,20 @@ export default function PortfolioPage() {
 
                       {/* Unstaking JUP */}
                       {(data.stakedJup?.unstakingAmount ?? 0) > 0.001 && (
-                        <div className="flex items-center justify-between px-4 py-3">
-                          <div>
-                            <p className="text-sm font-medium">JUP</p>
-                            <p className="text-xs text-yellow-700 mt-0.5">Unstaking · 7-day cooldown</p>
+                        <div className="flex items-center justify-between px-4 py-3 gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                              <img
+                                src="https://static.jup.ag/jup/icon.png"
+                                alt="JUP"
+                                className="w-full h-full object-cover"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">JUP</p>
+                              <p className="text-xs text-yellow-700 mt-0.5">Unstaking · 7-day cooldown</p>
+                            </div>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-medium">{data.stakedJup.unstakingAmount.toFixed(2)} JUP</p>
