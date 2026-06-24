@@ -32,6 +32,7 @@ interface Validator {
   commission: number;
   wiz_score: number;
   vote_success: number;
+  staking_apy: number;
   activated_stake: number;
   is_jito: boolean;
 }
@@ -117,7 +118,10 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
   }, [amount, selectedProtocol, mode]);
 
   function validatorScore(v: Validator) {
-    return (v.vote_success / 100) * ((100 - v.commission) / 100) * (v.wiz_score / 100) * (v.is_jito ? 1.05 : 1);
+    const apy     = (v.staking_apy ?? 0) / 10;        // ~7% APY → 0.7
+    const uptime  = v.vote_success / 100;
+    const fee     = (100 - v.commission) / 100;
+    return apy * 0.6 + uptime * 0.25 + fee * 0.15;
   }
   const aiPick = validators.length > 0
     ? validators.reduce((b, v) => validatorScore(v) > validatorScore(b) ? v : b)
@@ -259,9 +263,13 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold text-white">{aiPick.name || aiPick.vote_identity.slice(0, 12) + "…"}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{aiPick.commission}% fee · Score {aiPick.wiz_score.toFixed(0)}{aiPick.is_jito ? " · Jito MEV" : ""}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {aiPick.vote_success.toFixed(1)}% uptime · {aiPick.commission}% fee{aiPick.is_jito ? " · Jito MEV" : ""}
+                        </p>
                       </div>
-                      <span className="text-xs text-green-400">{aiPick.vote_success.toFixed(1)}% uptime</span>
+                      <span className="text-xs text-green-400 font-medium shrink-0 ml-2">
+                        {aiPick.staking_apy != null ? `${aiPick.staking_apy.toFixed(2)}% APY` : "—"}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -279,9 +287,13 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
                       className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors ${selected?.vote_identity === v.vote_identity ? "bg-gray-700" : "hover:bg-gray-900"}`}>
                       <div className="text-left">
                         <p className="font-medium truncate max-w-[200px]">{v.name || v.vote_identity.slice(0, 12) + "..."}</p>
-                        <p className="text-xs text-gray-500">Score {v.wiz_score.toFixed(0)} · {v.commission}% fee{v.is_jito ? " · Jito" : ""}</p>
+                        <p className="text-xs text-gray-500">
+                          {v.vote_success.toFixed(1)}% uptime · {v.commission}% fee{v.is_jito ? " · Jito" : ""}
+                        </p>
                       </div>
-                      <span className="text-xs text-green-400 ml-2 shrink-0">{v.vote_success.toFixed(1)}%</span>
+                      <span className="text-xs text-green-400 font-medium ml-2 shrink-0">
+                        {v.staking_apy != null ? `${v.staking_apy.toFixed(2)}%` : "—"}
+                      </span>
                     </button>
                   ))}
                 </div>
