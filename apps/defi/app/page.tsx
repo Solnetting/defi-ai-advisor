@@ -8,7 +8,6 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import WalletButton from "./components/WalletButton";
 import NativeStakeModal from "./components/NativeStakeModal";
 import StableYieldModal from "./components/StableYieldModal";
-import SwapModal from "./components/SwapModal";
 import BottomNav from "./components/BottomNav";
 import ChatPanel, { type ChatMessage } from "./components/ChatPanel";
 
@@ -53,6 +52,18 @@ interface StableYield {
   tvlUsd: number;
 }
 
+interface PerpPosition {
+  tokenSymbol: string;
+  side: "long" | "short";
+  leverage: number;
+  markPrice: number;
+  liquidationPrice: number;
+  collateralUsd: number;
+  sizeUsd: number;
+  pnlUsd: number;
+  netValueUsd: number;
+}
+
 interface WalletData {
   solBalance: number;
   stakedSOL: number;
@@ -68,6 +79,7 @@ interface WalletData {
   otherUsd: number;
   idleStables: IdleStable[];
   stakedJup: { amount: number; usd: number; unstakingAmount: number; jupPrice: number };
+  perpPositions: PerpPosition[];
   error?: string;
 }
 
@@ -90,7 +102,7 @@ function fmtUSD(usd: number): string {
 
 
 export default function Home() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, connecting } = useWallet();
   const { setVisible } = useWalletModal();
   const [address, setAddress] = useState("");
   const [data, setData] = useState<WalletData | null>(null);
@@ -102,9 +114,9 @@ export default function Home() {
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stableModal, setStableModal] = useState<{ symbol: string; idleUsd: number } | null>(null);
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
-  const [swapOpen, setSwapOpen] = useState(false);
   const planTouchX = useRef(0);
   const planDir = useRef(1);
+  const planTypesRef = useRef<Array<"sol" | "stable">>([]);
   const [forecastScenarios, setForecastScenarios] = useState<Array<{
     id: string;
     type: "price" | "contribution";
@@ -178,6 +190,12 @@ useEffect(() => {
             color: SCENARIO_COLORS[forecastScenarios.length % SCENARIO_COLORS.length],
           };
           setForecastScenarios((prev) => [...prev, newScenario]);
+
+          // If currently on a stable plan, switch to the first SOL plan so the scenario is visible
+          if (planTypesRef.current[currentPlanIndex] === "stable") {
+            const firstSolIdx = planTypesRef.current.findIndex((t) => t === "sol");
+            if (firstSolIdx >= 0) setCurrentPlanIndex(firstSolIdx);
+          }
 
           let content: string;
           if (fResult.type === "price" && fResult.targetPrice != null) {
@@ -272,14 +290,22 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
         {connected && (
           <div className="flex items-center justify-between mb-6">
             <span className="text-sm text-gray-600">DeFi AI Advisor</span>
-            <div className="flex items-center gap-2">
+            <WalletButton />
+          </div>
+        )}
+
+        {/* Searched wallet — view-only indicator */}
+        {!connected && !!data && (
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-sm text-gray-600">DeFi AI Advisor</span>
+            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full pl-3 pr-2 py-1.5">
+              <span className="text-[11px] font-mono text-gray-500">{address.slice(0, 4)}…{address.slice(-4)}</span>
+              <span className="text-[9px] text-gray-700 uppercase tracking-wide">view</span>
               <button
-                onClick={() => setSwapOpen(true)}
-                className="text-xs text-gray-400 hover:text-white border border-gray-800 hover:border-gray-700 rounded-full px-3 py-1.5 transition-colors"
-              >
-                Swap
-              </button>
-              <WalletButton />
+                onClick={() => { setData(null); setAddress(""); setError(""); }}
+                className="text-gray-700 hover:text-gray-400 transition-colors text-base leading-none ml-0.5 w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-800"
+                aria-label="Clear search"
+              >×</button>
             </div>
           </div>
         )}
@@ -342,7 +368,10 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           const kaminoUsd = data.kaminoPositions.reduce((s, p) => s + p.netValueUsd, 0);
           const nativeSolUsd = (data.idleSOL + data.stakedSOL) * data.solPrice;
           const jupStakedUsd = (data.stakedJup?.usd ?? 0) + (data.stakedJup?.unstakingAmount ?? 0) * (data.stakedJup?.jupPrice ?? 0);
-          const totalUsd = nativeSolUsd + kaminoUsd + data.stableUsd + data.otherUsd + jupStakedUsd;
+          const perps = data.perpPositions ?? [];
+          const perpNetUsd = perps.reduce((s, p) => s + p.netValueUsd, 0);
+          const perpCollateralUsd = perps.reduce((s, p) => s + p.collateralUsd, 0);
+          const totalUsd = nativeSolUsd + kaminoUsd + data.stableUsd + data.otherUsd + jupStakedUsd + perpNetUsd;
           const change24hUsd = totalUsd * ((data.solPrice24hChange ?? 0) / 100);
           const bestNativeAPY = yields.find((y) => y.label === "Native Staking")?.apy ?? 5.65;
           const yearlyIdleUsd = data.idleSOL * (bestNativeAPY / 100) * data.solPrice;
@@ -353,10 +382,27 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           let protocolSum = 0;
           for (const p of data.kaminoPositions) protocolSum += p.netValueUsd * (RISK_WEIGHTS[p.type] ?? 0.3);
           protocolSum += data.stakedSOL * data.solPrice * 0.1 + data.idleSOL * data.solPrice * 0.05 + data.stableUsd * 0.02 + data.otherUsd * 0.15 + jupStakedUsd * 0.15;
+          for (const p of perps) protocolSum += p.collateralUsd * Math.min(1.0, 0.3 + (p.leverage - 1) * 0.1);
           const protocolScore = totalUsd > 0 ? Math.min(100, Math.round((protocolSum / totalUsd) * 100)) : 0;
-          const hasLeverage = data.kaminoPositions.some((p) => p.type === "multiply");
+          const hasKaminoLev = data.kaminoPositions.some((p) => p.type === "multiply");
+          const hasPerps = perps.length > 0;
+          const hasLeverage = hasKaminoLev || hasPerps;
           const leverageUsdAmt = data.kaminoPositions.filter((p) => p.type === "multiply").reduce((s, p) => s + p.netValueUsd, 0);
-          const derivativesScore = hasLeverage ? Math.min(100, Math.round(50 + (leverageUsdAmt / (totalUsd || 1)) * 50)) : 0;
+          const avgPerpLev = hasPerps ? perps.reduce((s, p) => s + p.leverage * (p.collateralUsd / (perpCollateralUsd || 1)), 0) : 0;
+          let liqProximityPenalty = 0;
+          for (const p of perps) {
+            if (p.markPrice > 0 && p.liquidationPrice > 0) {
+              const dist = p.side === "long"
+                ? (p.markPrice - p.liquidationPrice) / p.markPrice
+                : (p.liquidationPrice - p.markPrice) / p.markPrice;
+              liqProximityPenalty += (dist < 0.10 ? 40 : dist < 0.20 ? 25 : dist < 0.30 ? 10 : 5) * (p.collateralUsd / (totalUsd || 1));
+            }
+          }
+          const perpLevScore = hasPerps ? Math.min(100, Math.round(30 + avgPerpLev * 8 + liqProximityPenalty)) : 0;
+          const derivativesScore = Math.min(100, Math.round(
+            (hasKaminoLev ? 50 + (leverageUsdAmt / (totalUsd || 1)) * 50 : 0) * 0.5 +
+            perpLevScore * 0.5
+          ));
           const defiTypes = new Set(data.kaminoPositions.map((p) => p.type));
           const hasDeFi = kaminoUsd / (totalUsd || 1) > 0.2;
           const stablePct = totalUsd > 0 ? (data.stableUsd / totalUsd) * 100 : 0;
@@ -367,7 +413,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           concentrationScore = Math.max(0, Math.min(100, concentrationScore));
           const dryPowderPct = totalUsd > 0 ? ((data.idleSOL * data.solPrice + data.stableUsd) / totalUsd) * 100 : 0;
           const rawScore = Math.round(protocolScore * 0.5 + concentrationScore * 0.3 + derivativesScore * 0.2 + (dryPowderPct < 1 ? 10 : dryPowderPct < 5 ? 5 : 0));
-          const riskScore = hasLeverage ? Math.max(41, rawScore) : rawScore;
+          const riskScore = (hasKaminoLev || hasPerps) ? Math.max(41, rawScore) : rawScore;
           const riskLabel = riskScore <= 20 ? "Low" : riskScore <= 40 ? "Medium" : riskScore <= 65 ? "High" : "Very High";
           const riskColor = riskScore <= 20 ? "text-green-400" : riskScore <= 40 ? "text-yellow-400" : riskScore <= 65 ? "text-orange-400" : "text-red-400";
           const riskBgColor = riskScore <= 20 ? "bg-green-400" : riskScore <= 40 ? "bg-yellow-400" : riskScore <= 65 ? "bg-orange-400" : "bg-red-400";
@@ -376,7 +422,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
           // ── Plans ────────────────────────────────────────────────────
           type Plan = {
-            title: string; impact: string; impactUsd: number; detail: string; onCta: () => void;
+            title: string; impact: string; impactUsd: number; detail: string; onCta: () => void; hideCta?: boolean;
             chartType: "sol" | "stable";
             stableUsd?: number; stableApy?: number; stableSymbol?: string;
           };
@@ -425,6 +471,9 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
             });
           }
 
+          plans.sort((a, b) => b.impactUsd - a.impactUsd);
+          planTypesRef.current = plans.map((p) => p.chartType);
+
           // Always show at least one plan so the card never appears empty
           if (plans.length === 0) {
             plans.push({
@@ -433,6 +482,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
               impactUsd: 0,
               detail: "All your SOL is staked or earning. Ask the AI for advanced rebalancing ideas.",
               onCta: () => {},
+              hideCta: true,
               chartType: "sol",
             });
           }
@@ -742,7 +792,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         <p className="text-[10px] text-gray-700 text-right px-5 pt-1">
                           DeFiLlama · CoinGecko · Helius · Kamino
                         </p>
-                        {activePlan && (
+                        {activePlan && !activePlan.hideCta && (
                           <div className="px-5 pt-3 pb-5">
                             <button onClick={activePlan.onCta}
                               className="w-full bg-white text-black font-semibold py-3.5 rounded-full hover:bg-gray-100 transition-colors text-sm">
@@ -767,9 +817,10 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
         <div className="px-5 pb-5 pt-3 space-y-3 shrink-0">
           <button
             onClick={() => setVisible(true)}
-            className="w-full bg-white text-black text-sm font-bold py-3.5 rounded-full hover:bg-gray-100 transition-colors"
+            disabled={connecting}
+            className="w-full bg-white text-black text-sm font-bold py-3.5 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
-            Connect Wallet
+            {connecting ? "Connecting…" : "Connect Wallet"}
           </button>
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-800" />
@@ -797,7 +848,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
       )}
 
       {/* AI chip — only shown once wallet/address is loaded */}
-      {(connected || !!data) && (
+      {!!data && (
         <ChatPanel
           placeholder={inputPlaceholder}
           onSend={handleChatSend}
@@ -817,9 +868,6 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           options={stableYields[stableModal.symbol] ?? []}
           onClose={() => setStableModal(null)}
         />
-      )}
-      {swapOpen && (
-        <SwapModal onClose={() => setSwapOpen(false)} />
       )}
       <BottomNav />
     </main>
