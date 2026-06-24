@@ -197,20 +197,11 @@ export default function SwapPage() {
                 </div>
 
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0"
                   value={amount}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const num = parseFloat(val);
-                    const max = balance !== null ? (fromToken.symbol === "SOL" ? Math.max(0, balance - 0.005) : balance) : Infinity;
-                    if (!isNaN(num) && num > max) {
-                      setAmount(fmtBalance(max, fromToken.decimals));
-                    } else {
-                      setAmount(val);
-                    }
-                    setError("");
-                  }}
+                  onChange={(e) => { setAmount(e.target.value); setError(""); }}
                   className="w-full bg-transparent text-3xl font-bold text-white outline-none placeholder-gray-800"
                 />
 
@@ -234,6 +225,14 @@ export default function SwapPage() {
                     ))}
                   </div>
                 </div>
+                {/* Insufficient funds warning */}
+                {(() => {
+                  const num = parseFloat(amount);
+                  const max = balance !== null ? (fromToken.symbol === "SOL" ? Math.max(0, balance - 0.005) : balance) : null;
+                  return max !== null && !isNaN(num) && num > max ? (
+                    <p className="text-red-400 text-xs mt-2">Insufficient funds</p>
+                  ) : null;
+                })()}
               </div>
 
               {/* Flip — zero-height row so button straddles the boundary without pushing content */}
@@ -302,7 +301,11 @@ export default function SwapPage() {
             ) : (
               <button
                 onClick={executeSwap}
-                disabled={!quote || swapping || quotePending}
+                disabled={(() => {
+                  const num = parseFloat(amount);
+                  const max = balance !== null ? (fromToken.symbol === "SOL" ? Math.max(0, balance - 0.005) : balance) : Infinity;
+                  return !quote || swapping || quotePending || (!isNaN(num) && num > max);
+                })()}
                 className="w-full bg-white text-black font-semibold py-3.5 rounded-full hover:bg-gray-100 disabled:opacity-40 transition-colors text-sm"
               >
                 {swapping ? "Swapping…" : quotePending ? "Getting quote…" : quote ? `Swap ${fromSymbol} → ${toSymbol}` : "Enter an amount"}
