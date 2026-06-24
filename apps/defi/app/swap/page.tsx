@@ -193,26 +193,25 @@ export default function SwapPage() {
                   className="w-full bg-transparent text-3xl font-bold text-white outline-none placeholder-gray-800"
                 />
 
-                {/* Balance + % shortcuts */}
+                {/* Balance + % shortcuts — always visible */}
                 <div className="flex items-center justify-between mt-3 gap-2">
-                  <span className="text-xs text-gray-700 shrink-0">
+                  <span className="text-xs text-gray-400 shrink-0">
                     {balance !== null
-                      ? `${fmtBalance(balance, fromToken.decimals)} ${fromSymbol}`
-                      : publicKey ? "…" : "—"}
+                      ? `Available: ${fmtBalance(balance, fromToken.decimals)} ${fromSymbol}`
+                      : publicKey ? "Loading…" : "Available: —"}
                   </span>
-                  {balance !== null && balance > 0 && (
-                    <div className="flex gap-1">
-                      {[25, 50, 75, 100].map(pct => (
-                        <button
-                          key={pct}
-                          onClick={() => setPercent(pct)}
-                          className="text-[10px] text-gray-500 hover:text-white border border-gray-800 hover:border-gray-600 rounded-full px-1.5 py-0.5 transition-colors"
-                        >
-                          {pct}%
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex gap-1">
+                    {[25, 50, 75, 100].map(pct => (
+                      <button
+                        key={pct}
+                        onClick={() => setPercent(pct)}
+                        disabled={!balance || balance <= 0}
+                        className="text-[10px] text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-full px-1.5 py-0.5 transition-colors disabled:opacity-30"
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
