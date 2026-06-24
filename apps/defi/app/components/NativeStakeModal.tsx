@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
@@ -49,6 +49,7 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
   const connection = new Connection(window.location.origin + "/api/rpc", "confirmed");
 
   const [mode, setMode] = useState<"native" | "liquid">("native");
+  const autoSelectedRef = useRef(false);
 
   // Native
   const [validators, setValidators]   = useState<Validator[]>([]);
@@ -83,7 +84,7 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
       .catch(() => {});
   }, []);
 
-  // Yields for liquid APY
+  // Yields for liquid APY — also drives which tab to show first
   useEffect(() => {
     fetch("/api/yields")
       .then((r) => r.json())
@@ -91,6 +92,17 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
         const map: Record<string, number> = {};
         for (const y of yields) map[y.symbol] = y.apy;
         setApyMap(map);
+
+        if (!autoSelectedRef.current) {
+          autoSelectedRef.current = true;
+          const nativeApy = map["SOL"] ?? 0;
+          const best = [...LIQUID_PROTOCOLS].sort((a, b) => (map[b.symbol] ?? 0) - (map[a.symbol] ?? 0))[0];
+          const bestLiquidApy = best ? (map[best.symbol] ?? 0) : 0;
+          if (bestLiquidApy > nativeApy) {
+            setMode("liquid");
+            setSelectedProtocol(best);
+          }
+        }
       })
       .catch(() => {});
   }, []);
@@ -233,15 +245,24 @@ export default function NativeStakeModal({ onClose, maxSOL }: Props) {
         ) : (
           <div className="overflow-y-auto flex-1 p-4 space-y-4">
 
-            {/* Mode toggle */}
-            <div className="flex gap-1 bg-gray-900 rounded-full p-1">
-              {(["native", "liquid"] as const).map((m) => (
-                <button key={m} onClick={() => { setMode(m); setAmount(""); setQuote(null); setError(""); setSelected(null); setSelectedProtocol(null); }}
-                  className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors ${mode === m ? "bg-white text-black" : "text-gray-500 hover:text-white"}`}>
-                  {m === "native" ? "Native" : "Liquid"}
-                </button>
-              ))}
-            </div>
+            {/* Mode toggle — leading tab is whichever has the higher APY */}
+            {(() => {
+              const nativeApy = apyMap["SOL"] ?? 0;
+              const bestLiquidApy = Math.max(...LIQUID_PROTOCOLS.map(p => apyMap[p.symbol] ?? 0));
+              const tabs: Array<"native" | "liquid"> = bestLiquidApy > nativeApy
+                ? ["liquid", "native"]
+                : ["native", "liquid"];
+              return (
+                <div className="flex gap-1 bg-gray-900 rounded-full p-1">
+                  {tabs.map((m) => (
+                    <button key={m} onClick={() => { setMode(m); setAmount(""); setQuote(null); setError(""); setSelected(null); setSelectedProtocol(null); }}
+                      className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors ${mode === m ? "bg-white text-black" : "text-gray-500 hover:text-white"}`}>
+                      {m === "native" ? `Native · ${nativeApy > 0 ? nativeApy.toFixed(2) + "%" : "—"}` : `Liquid · ${bestLiquidApy > 0 ? bestLiquidApy.toFixed(2) + "%" : "—"}`}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
 
             {mode === "native" ? (
               <>
