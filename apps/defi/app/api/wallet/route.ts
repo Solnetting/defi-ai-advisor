@@ -294,13 +294,51 @@ async function getTokenBreakdown(
   return { stableUsd, otherUsd, idleStables, priceMap };
 }
 
+const TOKEN_PROGRAM_ID    = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+async function getWalletBalances(address: string): Promise<{ solBalance: number; rawTokens: { mint: string; amount: number; decimals: number }[] }> {
+  const rpcCall = (id: string | number, method: string, params: unknown[]) =>
+    fetch(HELIUS_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+    }).then(r => r.json());
+
+  const [balRes, spl1Res, spl2022Res] = await Promise.all([
+    rpcCall(1, "getBalance", [address]),
+    rpcCall(2, "getTokenAccountsByOwner", [address, { programId: TOKEN_PROGRAM_ID }, { encoding: "jsonParsed" }]),
+    rpcCall(3, "getTokenAccountsByOwner", [address, { programId: TOKEN_2022_PROGRAM_ID }, { encoding: "jsonParsed" }]),
+  ]);
+
+  const solBalance = (balRes.result?.value ?? 0) / 1e9;
+
+  const parseAccounts = (res: { result?: { value?: unknown[] } }) =>
+    (res.result?.value ?? []).map((acc: unknown) => {
+      const a = acc as { account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string; decimals: number } } } } } };
+      return {
+        mint: a.account.data.parsed.info.mint,
+        amount: Number(a.account.data.parsed.info.tokenAmount.amount),
+        decimals: a.account.data.parsed.info.tokenAmount.decimals,
+      };
+    }).filter((t) => t.amount > 0);
+
+  const seen = new Set<string>();
+  const rawTokens: { mint: string; amount: number; decimals: number }[] = [];
+  for (const t of [...parseAccounts(spl1Res), ...parseAccounts(spl2022Res)]) {
+    if (!seen.has(t.mint)) { seen.add(t.mint); rawTokens.push(t); }
+  }
+
+  return { solBalance, rawTokens };
+}
+
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get("address");
   if (!address) return NextResponse.json({ error: "No address provided" }, { status: 400 });
 
   try {
-    const [balancesRes, stakedResult, solPriceData, kaminoPositions, stakedJup, perpPositions] = await Promise.all([
-      fetch(`${HELIUS_BASE}/addresses/${address}/balances?api-key=${HELIUS_API_KEY}`),
+    const [balances, stakedResult, solPriceData, kaminoPositions, stakedJup, perpPositions] = await Promise.all([
+      getWalletBalances(address),
       getStakedSOL(address),
       getSolPrice(),
       getKaminoPositions(address),
@@ -312,13 +350,9 @@ export async function GET(req: NextRequest) {
     const epochHoursRemaining = stakedResult.epochHoursRemaining;
     const { price: solPrice, change24h: solPrice24hChange } = solPriceData;
 
-    const data = await balancesRes.json();
-    const solBalance = (data.nativeBalance ?? 0) / 1e9;
+    const { solBalance, rawTokens } = balances;
     const kaminoSOL = kaminoPositions.reduce((sum, p) => sum + p.amountSOL, 0);
-    // solBalance from Helius is the native wallet balance only — staked and Kamino SOL
-    // are already in separate program accounts, not included in nativeBalance
     const idleSOL = solBalance;
-    const rawTokens = (data.tokens ?? []).filter((t: { amount: number }) => t.amount > 0);
 
     const mints = rawTokens.map((t: { mint: string }) => t.mint);
     const chunkSize = 50;
