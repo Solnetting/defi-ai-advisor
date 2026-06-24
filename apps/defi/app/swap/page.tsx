@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { VersionedTransaction, PublicKey } from "@solana/web3.js";
+import { VersionedTransaction } from "@solana/web3.js";
 import BottomNav from "../components/BottomNav";
 import WalletButton from "../components/WalletButton";
 
@@ -48,22 +48,33 @@ export default function SwapPage() {
       try {
         let bal: number;
         if (fromToken.symbol === "SOL") {
-          const lamports = await connection.getBalance(publicKey!);
-          bal = lamports / 1e9;
+          const res = await fetch("/api/rpc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [publicKey!.toBase58()] }),
+          });
+          const { result } = await res.json();
+          bal = result.value / 1e9;
         } else {
-          const mint = new PublicKey(fromToken.mint);
-          const accounts = await connection.getParsedTokenAccountsByOwner(publicKey!, { mint });
-          bal = (accounts.value[0]?.account.data as { parsed: { info: { tokenAmount: { uiAmount: number } } } })
-            ?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+          const res = await fetch("/api/rpc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner",
+              params: [publicKey!.toBase58(), { mint: fromToken.mint }, { encoding: "jsonParsed" }],
+            }),
+          });
+          const { result } = await res.json();
+          bal = result.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
         }
         if (!cancelled) setBalance(bal);
       } catch {
-        if (!cancelled) setBalance(null);
+        if (!cancelled) setBalance(0);
       }
     }
     fetchBalance();
     return () => { cancelled = true; };
-  }, [publicKey, fromSymbol, connection, fromToken.mint, fromToken.symbol]);
+  }, [publicKey, fromSymbol, fromToken.mint, fromToken.symbol]);
 
   useEffect(() => {
     setQuote(null);
@@ -189,7 +200,17 @@ export default function SwapPage() {
                   type="number"
                   placeholder="0"
                   value={amount}
-                  onChange={(e) => { setAmount(e.target.value); setError(""); }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const num = parseFloat(val);
+                    const max = balance !== null ? (fromToken.symbol === "SOL" ? Math.max(0, balance - 0.005) : balance) : Infinity;
+                    if (!isNaN(num) && num > max) {
+                      setAmount(fmtBalance(max, fromToken.decimals));
+                    } else {
+                      setAmount(val);
+                    }
+                    setError("");
+                  }}
                   className="w-full bg-transparent text-3xl font-bold text-white outline-none placeholder-gray-800"
                 />
 
