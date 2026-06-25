@@ -108,6 +108,7 @@ export default function ExplorePage() {
     : null;
 
   const hasStables = walletData && (walletData.idleStables ?? []).length > 0;
+  const stableSymbols = Object.keys(stableYields);
   const idleSOL = walletData?.idleSOL ?? 0;
   const solPrice = walletData?.solPrice ?? 0;
 
@@ -125,23 +126,21 @@ export default function ExplorePage() {
         </div>
 
         {/* Tabs */}
-        {hasStables && (
-          <div className="flex gap-1 mb-4 bg-gray-950 border border-gray-800 rounded-lg p-1">
-            {(["sol", "stables"] as const).map((t) => (
-              <button key={t} onClick={() => setActiveTab(t)}
-                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  activeTab === t ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"
-                }`}>
-                {t === "sol" ? "SOL Staking" : "Stablecoins"}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex gap-1 mb-4 bg-gray-950 border border-gray-800 rounded-lg p-1">
+          {(["sol", "stables"] as const).map((t) => (
+            <button key={t} onClick={() => setActiveTab(t)}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                activeTab === t ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"
+              }`}>
+              {t === "sol" ? "SOL Staking" : "Stablecoins"}
+            </button>
+          ))}
+        </div>
 
         {loading && <p className="text-gray-600 text-sm">Fetching live yields…</p>}
 
         {/* SOL staking yields */}
-        {(!hasStables || activeTab === "sol") && !loading && (() => {
+        {activeTab === "sol" && !loading && (() => {
           const solAiPick = pickBest(yields);
           return (
             <div className="space-y-4">
@@ -160,9 +159,14 @@ export default function ExplorePage() {
                   className="cursor-pointer bg-purple-950/40 border border-purple-800/50 rounded-xl px-4 py-3 active:bg-purple-950/60 transition-colors"
                   onClick={() => solAiPick.label === "Native Staking" ? setNativeExpanded(o => !o) : window.open(solAiPick.url, "_blank")}
                 >
-                  <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span className="text-purple-400 text-xs">✦</span>
                     <span className="text-purple-400 text-xs font-medium uppercase tracking-wide">AI Pick</span>
+                    {solAiPick.label === "Native Staking" && validatorAiPick && (
+                      <span className="text-[10px] text-purple-400 font-medium bg-purple-950/60 border border-purple-800/50 rounded-full px-1.5 py-px">
+                        {validatorAiPick.name?.split(" ")[0] ?? validatorAiPick.vote_identity.slice(0, 6) + "…"}
+                      </span>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowSolCriteria(s => !s); }}
                       className="text-purple-400/50 hover:text-purple-400 text-xs leading-none transition-colors"
@@ -269,36 +273,44 @@ export default function ExplorePage() {
         })()}
 
         {/* Stablecoin yields */}
-        {hasStables && activeTab === "stables" && !loading && (
+        {activeTab === "stables" && !loading && (
           <div className="space-y-4">
-            {/* Idle stables banner — same style as idle SOL */}
-            <div className="bg-gray-950 border border-yellow-900/40 rounded-xl px-4 py-3">
-              <p className="text-xs text-yellow-600">
-                <span className="text-yellow-400 font-medium">
-                  ${Math.round((walletData?.idleStables ?? []).reduce((s, st) => s + st.usd, 0)).toLocaleString()} idle stablecoins
-                </span>
-                {" "}· not earning yield
-              </p>
-            </div>
+            {/* Idle stables banner — only if wallet has idle stables */}
+            {hasStables && (
+              <div className="bg-gray-950 border border-yellow-900/40 rounded-xl px-4 py-3">
+                <p className="text-xs text-yellow-600">
+                  <span className="text-yellow-400 font-medium">
+                    ${Math.round((walletData?.idleStables ?? []).reduce((s, st) => s + st.usd, 0)).toLocaleString()} idle stablecoins
+                  </span>
+                  {" "}· not earning yield
+                </p>
+              </div>
+            )}
 
-            {(walletData?.idleStables ?? []).map((stable) => {
-              const options = stableYields[stable.symbol] ?? [];
+            {stableSymbols.length === 0 && (
+              <p className="text-gray-600 text-sm">Fetching stable yield data…</p>
+            )}
+
+            {stableSymbols.map((sym) => {
+              const options = stableYields[sym] ?? [];
               const aiPick = pickBest(options);
+              const walletStable = (walletData?.idleStables ?? []).find(s => s.symbol === sym);
+              const idleUsd = walletStable?.usd ?? 0;
               return (
-                <div key={stable.mint} className="space-y-2">
+                <div key={sym} className="space-y-2">
                   {/* ✦ AI Pick for this stable */}
                   {aiPick && (
                     <div className="bg-purple-950/40 border border-purple-800/50 rounded-xl px-4 py-3">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <span className="text-purple-400 text-xs">✦</span>
-                        <span className="text-purple-400 text-xs font-medium uppercase tracking-wide">AI Pick · {stable.symbol}</span>
+                        <span className="text-purple-400 text-xs font-medium uppercase tracking-wide">AI Pick · {sym}</span>
                         <button
-                          onClick={() => setShowStableCriteria(s => s === stable.symbol ? null : stable.symbol)}
+                          onClick={() => setShowStableCriteria(s => s === sym ? null : sym)}
                           className="text-purple-400/50 hover:text-purple-400 text-xs leading-none transition-colors"
                           aria-label="How was this picked?"
                         >ⓘ</button>
                       </div>
-                      {showStableCriteria === stable.symbol && (
+                      {showStableCriteria === sym && (
                         <p className="text-[10px] text-gray-500 leading-relaxed mb-2">
                           Picks the highest yield in the safest tier. A 4% safe option beats a 5% risky one — safety is weighted first, then APY.
                         </p>
@@ -308,7 +320,7 @@ export default function ExplorePage() {
                           <p className="text-sm font-semibold text-white">{aiPick.protocol}</p>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {SAFETY_LABEL[aiPick.risk] ?? aiPick.risk} · TVL {fmtTVL(aiPick.tvlUsd)}
-                            {stable.usd > 0 && ` · +$${(stable.usd * aiPick.apy / 100).toFixed(2)}/yr`}
+                            {idleUsd > 0 && ` · +$${(idleUsd * aiPick.apy / 100).toFixed(2)}/yr`}
                           </p>
                         </div>
                         <div className="text-right">
@@ -324,15 +336,17 @@ export default function ExplorePage() {
 
                   <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-900">
-                      <p className="text-xs text-gray-400 font-medium">{stable.symbol} · All options</p>
-                      <p className="text-xs text-gray-600">${stable.usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                      <p className="text-xs text-gray-400 font-medium">{sym} · All options</p>
+                      {idleUsd > 0 && (
+                        <p className="text-xs text-gray-600">${idleUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} idle</p>
+                      )}
                     </div>
                     {options.length === 0 && (
                       <p className="text-xs text-gray-700 px-4 py-3">No yield data available</p>
                     )}
                     <div className="divide-y divide-gray-900">
                       {options.slice(0, 5).map((opt) => {
-                        const yearlyUsd = stable.usd * (opt.apy / 100);
+                        const yearlyUsd = idleUsd * (opt.apy / 100);
                         const isAiPick = opt.protocol === aiPick?.protocol;
                         return (
                           <div key={opt.protocol} className={`px-4 py-3 flex items-start justify-between gap-3 ${isAiPick ? "bg-purple-950/20" : ""}`}>

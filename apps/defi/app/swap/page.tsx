@@ -37,6 +37,7 @@ export default function SwapPage() {
   const [txSig,      setTxSig]      = useState("");
   const [error,      setError]      = useState("");
   const [balance,    setBalance]    = useState<number | null>(null);
+  const [toBalance,  setToBalance]  = useState<number | null>(null);
 
   const fromToken = TOKENS.find(t => t.symbol === fromSymbol)!;
   const toToken   = TOKENS.find(t => t.symbol === toSymbol)!;
@@ -75,6 +76,41 @@ export default function SwapPage() {
     fetchBalance();
     return () => { cancelled = true; };
   }, [publicKey, fromSymbol, fromToken.mint, fromToken.symbol]);
+
+  useEffect(() => {
+    if (!publicKey) { setToBalance(null); return; }
+    let cancelled = false;
+    async function fetchToBalance() {
+      try {
+        let bal: number;
+        if (toToken.symbol === "SOL") {
+          const res = await fetch("/api/rpc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [publicKey!.toBase58()] }),
+          });
+          const { result } = await res.json();
+          bal = result.value / 1e9;
+        } else {
+          const res = await fetch("/api/rpc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner",
+              params: [publicKey!.toBase58(), { mint: toToken.mint }, { encoding: "jsonParsed" }],
+            }),
+          });
+          const { result } = await res.json();
+          bal = result.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+        }
+        if (!cancelled) setToBalance(bal);
+      } catch {
+        if (!cancelled) setToBalance(0);
+      }
+    }
+    fetchToBalance();
+    return () => { cancelled = true; };
+  }, [publicKey, toSymbol, toToken.mint, toToken.symbol]);
 
   useEffect(() => {
     setQuote(null);
@@ -266,6 +302,11 @@ export default function SwapPage() {
                     ? <span className="text-green-400">{outAmount}</span>
                     : <span className="text-gray-800">0</span>}
                 </div>
+                {publicKey && toBalance !== null && (
+                  <p className="text-xs text-gray-400 mt-3">
+                    Available: {fmtBalance(toBalance, toToken.decimals)} {toSymbol}
+                  </p>
+                )}
               </div>
             </div>
 

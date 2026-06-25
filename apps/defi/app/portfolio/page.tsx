@@ -5,7 +5,21 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import BottomNav from "../components/BottomNav";
 import ChatPanel from "../components/ChatPanel";
 import WalletButton from "../components/WalletButton";
+import SOLDetailSheet from "../components/SOLDetailSheet";
+import NativeStakeModal from "../components/NativeStakeModal";
 import type { WalletData } from "../lib/types";
+
+function TokenAvatar({ uri, label, initial }: { uri: string | null; label: string; initial: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+      {uri && !failed
+        ? <img src={uri} alt={label} className="w-full h-full object-cover" onError={() => setFailed(true)} />
+        : <span className="text-[10px] text-gray-500 font-medium">{initial}</span>
+      }
+    </div>
+  );
+}
 
 function fmtUSD(usd: number): string {
   if (usd === 0) return "$0";
@@ -93,7 +107,10 @@ export default function PortfolioPage() {
   const [data, setData] = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAllTokens, setShowAllTokens] = useState(false);
-  const [riskOpen, setRiskOpen] = useState(false);
+  const [riskOpen, setRiskOpen] = useState(true);
+  const [solSheetOpen, setSolSheetOpen] = useState(false);
+  const [stakeOpen, setStakeOpen] = useState(false);
+  const [nativeAPY, setNativeAPY] = useState(0.065);
 
   useEffect(() => {
     const address = publicKey?.toString() ?? (typeof window !== "undefined" ? localStorage.getItem("lastAddress") : null);
@@ -104,6 +121,16 @@ export default function PortfolioPage() {
       .then((json) => { if (!json.error) setData(json); })
       .finally(() => setLoading(false));
   }, [publicKey]);
+
+  useEffect(() => {
+    fetch("/api/yields")
+      .then((r) => r.json())
+      .then((yields: { label: string; apy: number }[]) => {
+        const native = yields.find((y) => y.label === "Native Staking");
+        if (native?.apy) setNativeAPY(native.apy / 100);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden min-h-0">
@@ -252,28 +279,27 @@ export default function PortfolioPage() {
 
                     {riskOpen && (
                       <div className="pb-3 space-y-3">
-                        <div className="relative h-1.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(to right, #22c55e, #eab308, #f97316, #ef4444)" }}>
-                          <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-black shadow"
-                            style={{ left: `calc(${Math.min(riskScore, 99)}% - 5px)` }} />
-                        </div>
-                        <div className="space-y-2">
-                          {[
-                            { label: "Protocol Exposure", score: protocolScore, weight: "50%", desc: "Weighted by position type risk" },
-                            { label: "Concentration", score: concentrationScore, weight: "30%", desc: "Spread across strategies" },
-                            { label: "Derivatives / Leverage", score: derivativesScore, weight: "20%", desc: "Kamino multiply positions" },
-                            { label: "Opportunity Readiness", score: opportunityScore, weight: "penalty", desc: "Liquid capital available to act" },
-                          ].map(({ label, score, weight, desc }) => (
+                        {[
+                          { label: "Protocol Exposure", score: protocolScore, weight: "50%", desc: "Weighted by position type risk" },
+                          { label: "Concentration", score: concentrationScore, weight: "30%", desc: "Spread across strategies" },
+                          { label: "Derivatives / Leverage", score: derivativesScore, weight: "20%", desc: "Kamino multiply positions" },
+                          { label: "Opportunity Readiness", score: opportunityScore, weight: "penalty", desc: "Liquid capital available to act" },
+                        ].map(({ label, score, weight, desc }) => {
+                          const barColor = score > 50 ? "#f97316" : score > 20 ? "#eab308" : "#22c55e";
+                          const textColor = score > 50 ? "text-orange-400" : score > 20 ? "text-yellow-400" : "text-green-400";
+                          return (
                             <div key={label} className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs text-gray-400 leading-none">{label} <span className="text-gray-700">· {weight}</span></p>
                                 <p className="text-xs text-gray-700 mt-0.5">{desc}</p>
+                                <div className="mt-1.5 h-1 rounded-full bg-gray-900 overflow-hidden" style={{ maxWidth: 120 }}>
+                                  <div className="h-full rounded-full" style={{ width: `${Math.min(score, 100)}%`, background: barColor }} />
+                                </div>
                               </div>
-                              <span className={`text-xs font-medium shrink-0 ${score > 50 ? "text-orange-400" : score > 20 ? "text-yellow-400" : "text-green-400"}`}>
-                                {score}
-                              </span>
+                              <span className={`text-xs font-medium shrink-0 tabular-nums ${textColor}`}>{score}</span>
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -294,22 +320,25 @@ export default function PortfolioPage() {
                     <p className="text-xs text-gray-600 px-4 pt-3 pb-2 border-b border-gray-900">Assets</p>
                     <div className="divide-y divide-gray-900">
 
-                      {/* SOL — single row, staked+idle breakdown below */}
+                      {/* SOL — tappable row opens SOLDetailSheet */}
                       {(data.stakedSOL > 0 || data.idleSOL > 0.001) && (() => {
                         const totalSOL = data.stakedSOL + data.idleSOL;
                         return (
-                          <div className="px-4 py-3">
+                          <button
+                            onClick={() => setSolSheetOpen(true)}
+                            className="w-full px-4 py-3 text-left active:bg-gray-900 transition-colors"
+                          >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-2.5">
-                                <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
-                                  <img
-                                    src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
-                                    alt="SOL"
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                                  />
+                                <TokenAvatar
+                                  uri="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+                                  label="SOL"
+                                  initial="S"
+                                />
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-medium">SOL</p>
+                                  <span className="text-[10px] font-medium border border-gray-800 rounded-full px-1.5 py-0.5 text-gray-600">Details</span>
                                 </div>
-                                <p className="text-sm font-medium">SOL</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-medium">{fmtSOL(totalSOL)} SOL</p>
@@ -332,7 +361,7 @@ export default function PortfolioPage() {
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </button>
                         );
                       })()}
 
@@ -377,15 +406,7 @@ export default function PortfolioPage() {
                         return (
                           <div key={i} className="flex items-center justify-between px-4 py-3 gap-3">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
-                                {tokenIcon ? (
-                                  <img src={tokenIcon} alt={p.tokenSymbol}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                                ) : (
-                                  <span className="text-[10px] text-gray-500 font-medium">{p.tokenSymbol[0]}</span>
-                                )}
-                              </div>
+                              <TokenAvatar uri={tokenIcon ?? null} label={p.tokenSymbol} initial={p.tokenSymbol[0]} />
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <p className="text-sm font-medium">{p.tokenSymbol} {p.side === "long" ? "Long" : "Short"}</p>
@@ -414,14 +435,7 @@ export default function PortfolioPage() {
                       {(data.stakedJup?.amount ?? 0) > 0.001 && (
                         <div className="flex items-center justify-between px-4 py-3 gap-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
-                              <img
-                                src="https://static.jup.ag/jup/icon.png"
-                                alt="JUP"
-                                className="w-full h-full object-cover"
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                              />
-                            </div>
+                            <TokenAvatar uri="https://static.jup.ag/jup/icon.png" label="JUP" initial="J" />
                             <div>
                               <p className="text-sm font-medium">JUP</p>
                               <p className="text-xs text-gray-600 mt-0.5">
@@ -441,14 +455,7 @@ export default function PortfolioPage() {
                       {(data.stakedJup?.unstakingAmount ?? 0) > 0.001 && (
                         <div className="flex items-center justify-between px-4 py-3 gap-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
-                              <img
-                                src="https://static.jup.ag/jup/icon.png"
-                                alt="JUP"
-                                className="w-full h-full object-cover"
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                              />
-                            </div>
+                            <TokenAvatar uri="https://static.jup.ag/jup/icon.png" label="JUP" initial="J" />
                             <div>
                               <p className="text-sm font-medium">JUP</p>
                               <p className="text-xs text-yellow-700 mt-0.5">Unstaking · 7-day cooldown</p>
@@ -469,14 +476,7 @@ export default function PortfolioPage() {
                         return (
                           <div key={t.mint} className="flex items-center justify-between px-4 py-2.5 gap-3">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
-                                {t.logoURI ? (
-                                  <img src={t.logoURI} alt={label} className="w-full h-full object-cover"
-                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                                ) : (
-                                  <span className="text-[10px] text-gray-500 font-medium">{initial}</span>
-                                )}
-                              </div>
+                              <TokenAvatar uri={t.logoURI} label={label} initial={initial} />
                               <div>
                                 <p className="text-sm text-gray-300">{label}</p>
                                 {isIdle && <p className="text-xs text-yellow-700">Idle · not earning</p>}
@@ -508,6 +508,22 @@ export default function PortfolioPage() {
         })()}
 
       </div>
+      {solSheetOpen && data && (
+        <SOLDetailSheet
+          data={data}
+          nativeAPY={nativeAPY}
+          onClose={() => setSolSheetOpen(false)}
+          onStake={() => { setSolSheetOpen(false); setStakeOpen(true); }}
+        />
+      )}
+
+      {stakeOpen && data && (
+        <NativeStakeModal
+          maxSOL={data.idleSOL}
+          onClose={() => setStakeOpen(false)}
+        />
+      )}
+
       <ChatPanel
         placeholder="Ask about your risk, positions, or strategy…"
         context={data ? [
