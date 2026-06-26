@@ -2,14 +2,47 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Icons: unicode glyphs from the Figma DS (86:6 Bottom Nav).
-// NEVER substitute these with SVG or invented icons.
-// If a new tab is needed, define the glyph in Figma DS first, then mirror it here.
 const tabs = [
-  { href: "/",          label: "Plans",     icon: "⌂" },
-  { href: "/portfolio", label: "Portfolio", icon: "⊕" },
-  { href: "/explore",   label: "Explore",   icon: "◎" },
-  { href: "/swap",      label: "Swap",      icon: "⇄" },
+  {
+    href: "/",
+    label: "Plans",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" />
+        <path d="M9 21V12h6v9" />
+      </svg>
+    ),
+  },
+  {
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    href: "/explore",
+    label: "Explore",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    href: "/swap",
+    label: "Swap",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 16V4m0 0L3 8m4-4l4 4" />
+        <path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+      </svg>
+    ),
+  },
 ];
 
 export default function BottomNav() {
@@ -26,7 +59,7 @@ export default function BottomNav() {
               active ? "text-white" : "text-[#3f3f46] hover:text-gray-400"
             }`}
           >
-            <span className="text-xl leading-none">{icon}</span>
+            {icon}
             <span className={`text-xs ${active ? "font-semibold" : "font-normal"}`}>{label}</span>
           </Link>
         );

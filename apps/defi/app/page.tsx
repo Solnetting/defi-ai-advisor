@@ -274,7 +274,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
   const inputPlaceholder = (() => {
     if (!data) return "Ask about your plan or anything else";
-    if (data.idleSOL > 0.01) return `What if SOL hits $${Math.round(data.solPrice * 2).toLocaleString()}?`;
+    if (data.idleSOL > 0.01) return `+ What if SOL hits $${Math.round(data.solPrice * 2).toLocaleString()}?`;
     for (const stable of data.idleStables ?? []) {
       if (stableYields[stable.symbol]?.[0]) return `What if ${stable.symbol} rates drop to 2%?`;
     }
@@ -290,7 +290,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
         {/* Wallet bar — only visible when connected */}
         {connected && (
           <div className="flex items-center justify-between mb-6">
-            <span className="text-sm text-gray-600">DeFi AI Advisor</span>
+            <span className="text-xl font-bold text-white">DeFi AI Advisor</span>
             <WalletButton />
           </div>
         )}
@@ -298,7 +298,7 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
         {/* Searched wallet — view-only indicator */}
         {!connected && !!data && (
           <div className="flex items-center justify-between mb-6">
-            <span className="text-sm text-gray-600">DeFi AI Advisor</span>
+            <span className="text-xl font-bold text-white">DeFi AI Advisor</span>
             <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full pl-3 pr-2 py-1.5">
               <span className="text-[11px] font-mono text-gray-500">{address.slice(0, 4)}…{address.slice(-4)}</span>
               <span className="text-[9px] text-gray-700 uppercase tracking-wide">view</span>
@@ -782,16 +782,16 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                                 );
                               }}
                             />
+                            <Area yAxisId="left" type="natural" dataKey="current"
+                              stroke="#fbbf24" strokeWidth={2} fill="url(#gradCurrent)"
+                              dot={false} activeDot={{ r: 4, fill: "#fbbf24", stroke: "#0a0a0a", strokeWidth: 1.5 }}
+                              isAnimationActive={false} />
                             {showOptimized && (
                               <Area yAxisId="left" type="natural" dataKey="optimized"
-                                stroke="#4ade80" strokeWidth={2} fill="url(#gradOptimized)"
+                                stroke="#4ade80" strokeWidth={2.5} fill="url(#gradOptimized)"
                                 dot={false} activeDot={{ r: 4, fill: "#4ade80", stroke: "#0a0a0a", strokeWidth: 1.5 }}
                                 isAnimationActive={false} />
                             )}
-                            <Area yAxisId="left" type="natural" dataKey="current"
-                              stroke="#fbbf24" strokeWidth={2.5} fill="url(#gradCurrent)"
-                              dot={false} activeDot={{ r: 4, fill: "#fbbf24", stroke: "#0a0a0a", strokeWidth: 1.5 }}
-                              isAnimationActive={false} />
                             {forecastScenarios.map((s) => (
                               <Area key={s.id} yAxisId="left" type="natural" dataKey={`s_${s.id}`}
                                 stroke={s.color} strokeWidth={1.5} strokeDasharray="4 2"
