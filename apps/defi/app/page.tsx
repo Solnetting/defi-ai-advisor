@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AnimatePresence, motion } from "framer-motion";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import WalletButton from "./components/WalletButton";
@@ -597,22 +598,29 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         }}
                       >
 
-                        {/* ── Plan label + dot pagination ── */}
+                        {/* ── Plan label + impact badge + dot pagination ── */}
                         <div className="flex items-center justify-between px-5 pt-5 pb-1">
                           <p className="text-xs text-gray-600">Plan</p>
-                          {plans.length > 1 && (
-                            <div className="flex items-center gap-1.5">
-                              {plans.map((_, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => { planDir.current = i > planIdx ? 1 : -1; setCurrentPlanIndex(i); }}
-                                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                                    i === planIdx ? "w-4 bg-white" : "w-1.5 bg-gray-700 hover:bg-gray-500"
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {activePlan && (
+                              <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${impactBorder}`}>
+                                {impactLabel}
+                              </span>
+                            )}
+                            {plans.length > 1 && (
+                              <div className="flex items-center gap-1.5">
+                                {plans.map((_, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => { planDir.current = i > planIdx ? 1 : -1; setCurrentPlanIndex(i); }}
+                                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                                      i === planIdx ? "w-4 bg-white" : "w-1.5 bg-gray-700 hover:bg-gray-500"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* ── Animated plan content ── */}
@@ -621,16 +629,11 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                           style={{ animation: `${planDir.current >= 0 ? "plan-slide-from-right" : "plan-slide-from-left"} 0.22s ease-out both` }}
                         >
 
-                        {/* ── Plan title + badge inline ── */}
-                        <div className="px-5 pt-1 flex items-center gap-2 flex-wrap">
+                        {/* ── Plan title ── */}
+                        <div className="px-5 pt-1">
                           <p className="text-base font-semibold text-white leading-tight">
                             {activePlan ? activePlan.title : "Portfolio forecast"}
                           </p>
-                          {activePlan && (
-                            <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${impactBorder}`}>
-                              {impactLabel}
-                            </span>
-                          )}
                         </div>
 
                         {/* ── Hero impact number ── */}
@@ -689,20 +692,29 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
                         {/* ── Scenario chips ── */}
                         {!isStablePlan && forecastScenarios.length > 0 && (
                           <div className="flex flex-row flex-wrap gap-1.5 px-5 pb-3">
-                            {forecastScenarios.map((s) => (
-                              <div key={s.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
-                                style={{ background: `${s.color}12`, border: `1px solid ${s.color}35`, color: s.color }}>
-                                <span className="inline-flex items-center justify-center rounded-full shrink-0"
-                                  style={{ width: 14, height: 14, border: `1px solid currentColor`, opacity: 0.8 }}>
-                                  <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
-                                    <polyline points="0,6.5 2,4 4.5,5.5 7,1.5 9,0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                  </svg>
-                                </span>
-                                <span className="whitespace-nowrap">{s.label}</span>
-                                <button onClick={() => setForecastScenarios((prev) => prev.filter((x) => x.id !== s.id))}
-                                  className="opacity-40 hover:opacity-70 leading-none ml-0.5">✕</button>
-                              </div>
-                            ))}
+                            <AnimatePresence initial={false}>
+                              {forecastScenarios.map((s) => (
+                                <motion.div
+                                  key={s.id}
+                                  layout
+                                  initial={{ opacity: 0, scale: 0.85 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.85 }}
+                                  transition={{ duration: 0.18, ease: "easeOut" }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
+                                  style={{ background: `${s.color}12`, border: `1px solid ${s.color}35`, color: s.color }}>
+                                  <span className="inline-flex items-center justify-center rounded-full shrink-0"
+                                    style={{ width: 14, height: 14, border: `1px solid currentColor`, opacity: 0.8 }}>
+                                    <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                      <polyline points="0,6.5 2,4 4.5,5.5 7,1.5 9,0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  </span>
+                                  <span className="whitespace-nowrap">{s.label}</span>
+                                  <button onClick={() => setForecastScenarios((prev) => prev.filter((x) => x.id !== s.id))}
+                                    className="opacity-40 hover:opacity-70 leading-none ml-0.5">✕</button>
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
                           </div>
                         )}
 

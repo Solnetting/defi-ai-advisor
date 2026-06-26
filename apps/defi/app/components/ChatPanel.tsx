@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { FadeSlideIn } from "@defi/microinteractions";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -113,20 +114,32 @@ export default function ChatPanel({
             className="overflow-y-auto px-4 py-3 space-y-3"
             style={{ maxHeight: 220 }}
           >
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] text-xs px-3 py-2.5 rounded-xl leading-relaxed ${
-                  m.role === "user" ? "bg-gray-800 text-white" : "text-gray-300"
-                }`}>
-                  {m.content}
-                  {m.role === "assistant" && (
-                    <span className="inline-flex ml-1.5 align-middle" style={{ verticalAlign: "middle" }}>
-                      <AIIcon color={m.color ?? "#a855f7"} size={14} />
-                    </span>
-                  )}
+            {messages.map((m, i) => {
+              const bubble = (
+                <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] text-xs px-3 py-2.5 rounded-xl leading-relaxed ${
+                    m.role === "user" ? "bg-gray-800 text-white" : "text-gray-300"
+                  }`}>
+                    {m.content}
+                    {m.role === "assistant" && (
+                      <span className="inline-flex ml-1.5 align-middle" style={{ verticalAlign: "middle" }}>
+                        <AIIcon color={m.color ?? "#a855f7"} size={14} />
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+              // Only the newest message animates in — replaying history on
+              // every render would make the thread feel jumpy on rescroll.
+              const isLatest = i === messages.length - 1;
+              return isLatest ? (
+                <FadeSlideIn key={i} direction={m.role === "user" ? "right" : "left"}>
+                  {bubble}
+                </FadeSlideIn>
+              ) : (
+                <div key={i}>{bubble}</div>
+              );
+            })}
             {loading && (
               <div className="flex justify-start">
                 <div className="px-3 py-3.5 flex items-center gap-1.5">
@@ -146,9 +159,7 @@ export default function ChatPanel({
 
       {/* Chip input — always visible */}
       <div className="px-4 py-3">
-        <div className={`flex items-center border rounded-full pl-4 pr-1.5 py-1.5 transition-all ${
-          focused ? "border-purple-600" : "border-purple-600/55"
-        }`}>
+        <div className={`flex items-center rounded-full pl-4 pr-1.5 py-1.5 transition-all ${focused ? "bg-purple-950/70 border border-purple-600" : "bg-purple-950/50 border border-purple-800/60"}`}>
           <span className={`text-xs shrink-0 mr-3 transition-colors ${focused ? "text-purple-400" : "text-purple-500"}`}>
             ✦
           </span>
