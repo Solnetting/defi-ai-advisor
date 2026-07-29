@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY;
-const HELIUS_BASE = "https://api.helius.xyz/v0";
 const HELIUS_RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -13,9 +12,7 @@ const STABLE_MINTS = new Set([
   "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo", // PYUSD
   "USDH1SM1ojwWUga67PGrgFWUHibbjqMvuMaDkRJTgkX",  // USDH
   "Ea5SjE2Y6yvjfxjdiYkPiJwrR9wZkHTMGW3kuk35MoRT", // PAI
-  // TODO: replace with confirmed on-chain mints once available
-  // "???", // CASH
-  // "???", // JupUSD
+  "JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD",  // JupUSD — Jupiter yield-bearing USD, $1-pegged (CoinGecko confirmed)
 ]);
 
 // Display symbol for each known stable mint
@@ -26,6 +23,7 @@ const STABLE_SYMBOLS: Record<string, string> = {
   "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo": "PYUSD",
   "USDH1SM1ojwWUga67PGrgFWUHibbjqMvuMaDkRJTgkX":  "USDH",
   "Ea5SjE2Y6yvjfxjdiYkPiJwrR9wZkHTMGW3kuk35MoRT": "PAI",
+  "JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD":  "JupUSD",
 };
 
 interface KaminoPosition {
@@ -207,7 +205,8 @@ async function getStakedJUP(address: string): Promise<{ amount: number; usd: num
 
 const TOKEN_SYMBOL: Record<string, string> = {
   "So11111111111111111111111111111111111111112": "SOL",
-  "3NZ9JMVXkeihGaKdEiF1jsHt5LEgkVRQQjJQ1zwsRpZT": "BTC",  // cbBTC — Jupiter Perps primary
+  "3NZ9JMVXkeihGaKdEiF1jsHt5LEgkVRQQjJQ1zwsRpZT": "BTC",  // cbBTC
+  "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh": "BTC",  // Jupiter Perps BTC market
   "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": "BTC",  // wBTC legacy
   "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs": "ETH",  // Wormhole wETH
   "2FPyTwcZLUgFDPkudBcsbKDsHpQxNRtKFXJGTpq6BEfp": "ETH",  // allbridge ETH
@@ -215,32 +214,32 @@ const TOKEN_SYMBOL: Record<string, string> = {
 
 async function getJupiterPerpPositions(address: string): Promise<import("../../lib/types").PerpPosition[]> {
   try {
-    const res = await fetch(`https://api.jup.ag/portfolio/v1/positions/${address}`, {
+    // Use perps-api.jup.ag/v2 — the portfolio/v1 endpoint has deserialization issues
+    // with newer position account formats. All USD values in v2 are in micro-USD (÷1e6).
+    const res = await fetch(`https://perps-api.jup.ag/v2/positions?walletAddress=${address}`, {
       next: { revalidate: 30 },
     });
     if (!res.ok) return [];
     const data = await res.json();
+    const S = 1e6; // micro-USD scale factor
     const positions: import("../../lib/types").PerpPosition[] = [];
 
-    for (const el of data.elements ?? []) {
-      if (el.type !== "leverage") continue;
-      for (const pos of el.data?.isolated?.positions ?? []) {
-        const mint: string = pos.address ?? "";
-        positions.push({
-          tokenMint: mint,
-          tokenSymbol: TOKEN_SYMBOL[mint] ?? mint.slice(0, 4),
-          side: pos.side === "short" ? "short" : "long",
-          leverage: Number(pos.leverage ?? 1),
-          entryPrice: Number(pos.entryPrice ?? 0),
-          markPrice: Number(pos.markPrice ?? 0),
-          liquidationPrice: Number(pos.liquidationPrice ?? 0),
-          collateralUsd: Number(pos.collateralValue ?? 0),
-          sizeUsd: Number(pos.sizeValue ?? 0),
-          pnlUsd: Number(pos.pnlValue ?? 0),
-          netValueUsd: Number(pos.value ?? 0),
-          stopLoss: pos.sl ? Number(pos.sl) : null,
-        });
-      }
+    for (const el of data.dataList ?? []) {
+      const slReq = (el.tpslRequests ?? []).find((r: Record<string, string>) => r.requestType === "sl");
+      positions.push({
+        tokenMint: el.assetMint ?? "",
+        tokenSymbol: el.asset ?? "?",
+        side: el.side === "short" ? "short" : "long",
+        leverage: Number(el.leverage ?? 1),
+        entryPrice: Number(el.entryPriceUsd ?? 0) / S,
+        markPrice: Number(el.markPriceUsd ?? 0) / S,
+        liquidationPrice: Number(el.liquidationPriceUsd ?? 0) / S,
+        collateralUsd: Number(el.collateralUsd ?? 0) / S,
+        sizeUsd: Number(el.sizeUsd ?? 0) / S,
+        pnlUsd: Number(el.pnlAfterFeesUsd ?? 0) / S,
+        netValueUsd: Number(el.valueUsd ?? 0) / S,
+        stopLoss: slReq ? Number(slReq.triggerPriceUsd) / S : null,
+      });
     }
     return positions;
   } catch {
@@ -273,23 +272,8 @@ async function getTokenBreakdown(
     }
   }
 
-  let otherUsd = 0;
-  if (nonStable.length > 0) {
-    try {
-      const ids = nonStable.map((t) => t.mint).join(",");
-      const res = await fetch(`https://price.jup.ag/v6/price?ids=${ids}`, {
-        next: { revalidate: 60 },
-      });
-      const json = await res.json();
-      for (const t of nonStable) {
-        const price = parseFloat(json?.data?.[t.mint]?.price ?? "0");
-        priceMap[t.mint] = price;
-        otherUsd += (t.amount / Math.pow(10, t.decimals)) * price;
-      }
-    } catch {
-      // skip if price fetch fails — otherUsd stays 0
-    }
-  }
+  // otherUsd is recalculated after DAS prices are available — placeholder here
+  const otherUsd = 0;
 
   return { stableUsd, otherUsd, idleStables, priceMap };
 }
@@ -355,59 +339,76 @@ export async function GET(req: NextRequest) {
     const idleSOL = solBalance;
 
     const mints = rawTokens.map((t: { mint: string }) => t.mint);
-    const chunkSize = 50;
-    const chunks: string[][] = [];
-    for (let i = 0; i < mints.length; i += chunkSize) {
-      chunks.push(mints.slice(i, i + chunkSize));
+
+    // DAS getAssetBatch (up to 1000 per call) — returns metadata + price_per_token
+    async function getAssetBatchMeta(ids: string[]): Promise<Record<string, { name: string; symbol: string; logoURI: string | null; price: number }>> {
+      const map: Record<string, { name: string; symbol: string; logoURI: string | null; price: number }> = {};
+      if (ids.length === 0) return map;
+      const chunkSize = 1000;
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
+      await Promise.all(chunks.map(async (chunk) => {
+        try {
+          const res = await fetch(HELIUS_RPC, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAssetBatch", params: { ids: chunk } }),
+          });
+          const data = await res.json();
+          for (const asset of (data.result ?? [])) {
+            if (!asset?.id) continue;
+            const content = asset.content ?? {};
+            const meta = content.metadata ?? {};
+            const logoURI =
+              content.links?.image ??
+              content.files?.[0]?.cdn_uri ??
+              content.files?.[0]?.uri ??
+              null;
+            const price: number = asset.token_info?.price_info?.price_per_token ?? 0;
+            map[asset.id] = {
+              name: meta.name?.replace(/\0/g, "").trim() || null,
+              symbol: meta.symbol?.replace(/\0/g, "").trim() || null,
+              logoURI: logoURI ?? null,
+              price,
+            };
+          }
+        } catch { /* skip failed chunk */ }
+      }));
+      return map;
     }
 
-    // Run token metadata (all chunks) + token price breakdown in parallel
-    const [tokenBreakdown, ...metaResults] = await Promise.all([
+    // Run DAS metadata (includes prices) + Jupiter strict list in parallel
+    const [tokenBreakdown, metaMap, jupiterListRaw] = await Promise.all([
       getTokenBreakdown(rawTokens),
-      ...chunks.map((chunk) =>
-        fetch(`${HELIUS_BASE}/token-metadata?api-key=${HELIUS_API_KEY}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mintAccounts: chunk, includeOffChain: true, disableCache: false }),
-        })
-          .then((r) => r.json())
-          .catch(() => [])
-      ),
+      getAssetBatchMeta(mints),
+      fetch("https://lite-api.jup.ag/tokens/v1/strict")
+        .then((r) => r.json())
+        .catch(() => []),
     ]);
 
-    const metaMap: Record<string, { name: string; symbol: string; logoURI: string | null }> = {};
-    for (const metaData of metaResults) {
-      if (Array.isArray(metaData)) {
-        for (const item of metaData) {
-          const mint = item.account;
-          const name =
-            item.onChainMetadata?.metadata?.data?.name?.replace(/\0/g, "").trim() || null;
-          const symbol =
-            item.onChainMetadata?.metadata?.data?.symbol?.replace(/\0/g, "").trim() || null;
-          const rawLogo =
-            item.legacyMetadata?.logoURI ??
-            item.offChainMetadata?.metadata?.image ??
-            item.offChainMetadata?.metadata?.logoURI ??
-            null;
-          // Transform ipfs:// URIs to a public HTTP gateway
-          const logoURI = rawLogo?.startsWith("ipfs://")
-            ? `https://ipfs.io/ipfs/${rawLogo.slice(7)}`
-            : rawLogo;
-          if (mint) metaMap[mint] = { name, symbol, logoURI: logoURI ?? null };
-        }
+    // Build Jupiter fallback map: mint → logoURI
+    const jupLogoMap: Record<string, string> = {};
+    if (Array.isArray(jupiterListRaw)) {
+      for (const t of jupiterListRaw) {
+        if (t.address && t.logoURI) jupLogoMap[t.address] = t.logoURI;
       }
     }
 
     const tokens = rawTokens
       .map((t: { mint: string; amount: number; decimals: number }) => {
-        const price = tokenBreakdown.priceMap[t.mint] ?? 0;
+        // Prefer DAS price (Helius); fall back to Jupiter price breakdown for stables
+        const dasPrice = metaMap[t.mint]?.price ?? 0;
+        const stablePrice = tokenBreakdown.priceMap[t.mint] ?? 0;
+        const price = dasPrice > 0 ? dasPrice : stablePrice;
+        const dasMeta = metaMap[t.mint];
+        const logoURI = dasMeta?.logoURI ?? jupLogoMap[t.mint] ?? null;
         return {
           mint: t.mint,
           amount: t.amount,
           decimals: t.decimals,
-          name: metaMap[t.mint]?.name ?? null,
-          symbol: metaMap[t.mint]?.symbol ?? null,
-          logoURI: metaMap[t.mint]?.logoURI ?? null,
+          name: dasMeta?.name ?? null,
+          symbol: dasMeta?.symbol ?? null,
+          logoURI,
           usdValue: (t.amount / Math.pow(10, t.decimals)) * price,
         };
       })
@@ -425,7 +426,8 @@ export async function GET(req: NextRequest) {
       kaminoPositions,
       tokens,
       stableUsd: tokenBreakdown.stableUsd,
-      otherUsd: tokenBreakdown.otherUsd,
+      otherUsd: tokens.reduce((s: number, t: { usdValue: number; mint: string }) =>
+        !STABLE_MINTS.has(t.mint) ? s + t.usdValue : s, 0),
       idleStables: tokenBreakdown.idleStables,
       stakedJup,
       perpPositions,
