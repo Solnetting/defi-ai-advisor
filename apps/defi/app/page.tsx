@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AnimatePresence, motion } from "framer-motion";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -11,6 +10,7 @@ import NativeStakeModal from "./components/NativeStakeModal";
 import StableYieldModal from "./components/StableYieldModal";
 import BottomNav from "./components/BottomNav";
 import ChatPanel, { type ChatMessage } from "./components/ChatPanel";
+import { HeroValue, Button, PlanCard } from "@defi/ui";
 
 interface YieldOption {
   label: string;
@@ -115,7 +115,6 @@ export default function Home() {
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stableModal, setStableModal] = useState<{ symbol: string; idleUsd: number } | null>(null);
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
-  const planTouchX = useRef(0);
   const planDir = useRef(1);
   const planTypesRef = useRef<Array<"sol" | "stable">>([]);
   const [forecastScenarios, setForecastScenarios] = useState<Array<{
@@ -501,21 +500,30 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
           const labelStep = timeframe === "1Y" ? 2 : timeframe === "3Y" ? 6 : 12;
           const showOptimized = isStablePlan || data.idleSOL > 0.01;
 
-          // Both lines start at the SAME value today and diverge from there
+          // When no scenarios active: show idle SOL chart (flat vs staked) — gives two
+          // genuinely distinct lines. When scenarios are active: total portfolio is needed.
+          const useIdleChart = !isStablePlan && forecastScenarios.length === 0 && data.idleSOL > 0.01;
+
           const chartData = Array.from({ length: totalPoints + 1 }, (_, m) => {
             const yr = m / 12;
             if (isStablePlan && activePlan.stableUsd != null && activePlan.stableApy != null) {
-              // No rounding — Math.round on small amounts creates a step function
-              // that cubic spline interpolation then overshoots into a visible spike
               return {
                 m,
                 current: activePlan.stableUsd,
                 optimized: activePlan.stableUsd * Math.pow(1 + activePlan.stableApy / 100, yr),
               };
             }
-            // Current path: deployed SOL grows at APY, idle SOL stays flat (does nothing)
+            if (useIdleChart) {
+              // Idle SOL: current stays flat (not staked), optimized compounds (staked)
+              const idleUSD = data.idleSOL * data.solPrice;
+              return {
+                m,
+                current: idleUSD,
+                ...(showOptimized && { optimized: data.idleSOL * Math.pow(1 + nativeAPY, yr) * data.solPrice }),
+              };
+            }
+            // Total portfolio (used when AI scenarios are active)
             const currentPathUSD = (deployedBase * Math.pow(1 + nativeAPY, yr) + data.idleSOL) * data.solPrice;
-            // Optimized: ALL SOL grows at APY — same start, faster growth
             const optimizedSOL = totalSOL * Math.pow(1 + nativeAPY, yr);
             const optimizedUSD = optimizedSOL * data.solPrice;
             const scenarioData: Record<string, number> = {};
@@ -536,12 +544,14 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
               ...scenarioData,
             };
           });
+
+          // Labels always show total portfolio gains regardless of chart type
+          const totalPointsYr = totalPoints / 12;
+          const portfolioFinalCurrent = (deployedBase * Math.pow(1 + nativeAPY, totalPointsYr) + data.idleSOL) * data.solPrice;
+          const portfolioFinalOptimized = totalSOL * Math.pow(1 + nativeAPY, totalPointsYr) * data.solPrice;
           const lastPoint = chartData[totalPoints] as unknown as Record<string, number>;
-          const finalCurrentUSD = chartData[totalPoints].current;
-          const finalOptimizedUSD = lastPoint.optimized ?? finalCurrentUSD;
-          const gainPct = showOptimized && finalCurrentUSD > 0
-            ? ((finalOptimizedUSD - finalCurrentUSD) / finalCurrentUSD * 100).toFixed(1)
-            : null;
+          const finalCurrentUSD = isStablePlan ? chartData[totalPoints].current : portfolioFinalCurrent;
+          const finalOptimizedUSD = isStablePlan ? (lastPoint.optimized ?? finalCurrentUSD) : portfolioFinalOptimized;
           const ticks = Array.from({ length: Math.floor(totalPoints / labelStep) + 1 }, (_, i) => i * labelStep);
           const fmtTick = (m: number) => {
             if (m === 0) return "Now";
@@ -554,16 +564,11 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
               {/* ── 1. HERO VALUE ───────────────────────────────────── */}
               <div className="pt-2 pb-4">
-                <p className="text-5xl font-bold tracking-tight">{fmtUSD(totalUsd)}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <p className="text-sm">
-                    <span className={change24hUsd >= 0 ? "text-green-400" : "text-red-400"}>
-                      {change24hUsd >= 0 ? "↑" : "↓"} {fmtUSD(Math.abs(change24hUsd))} · {Math.abs(data.solPrice24hChange ?? 0).toFixed(2)}%
-                    </span>
-                    <span className="text-gray-600"> 24h</span>
-                  </p>
-                  <span className="text-[10px] text-gray-700">· CoinGecko</span>
-                </div>
+                <HeroValue
+                  totalUsd={totalUsd}
+                  change24hUsd={change24hUsd}
+                  change24hPct={data.solPrice24hChange ?? 0}
+                />
                 <Link href="/portfolio">
                   <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full border border-gray-800 hover:border-gray-700 transition-colors">
                     <div className={`w-1.5 h-1.5 rounded-full ${riskBgColor}`} />
@@ -575,245 +580,73 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
 
               {/* ── 2+3. UNIFIED CARD: chart + plan ─────────────────── */}
               {(() => {
-                    const todayUSD = chartData[0].current;
-                    const gainCurrent = finalCurrentUSD - todayUSD;
-                    const gainOptimized = finalOptimizedUSD - todayUSD;
+                    const gainCurrent = isStablePlan ? 0 : finalCurrentUSD - totalUsd;
+                    const gainOptimized = isStablePlan
+                      ? finalOptimizedUSD - (activePlan?.stableUsd ?? 0)
+                      : finalOptimizedUSD - totalUsd;
                     const pct = totalUsd > 0 && activePlan ? (activePlan.impactUsd / totalUsd) * 100 : 0;
-                    const [impactLabel, impactBorder] =
-                      pct >= 5   ? ["Very high impact", "border-green-500 text-green-400"]
-                      : pct >= 2 ? ["High impact",      "border-green-500 text-green-400"]
-                      : pct >= 0.5 ? ["Moderate impact", "border-yellow-500 text-yellow-400"]
-                      :              ["Low impact",       "border-gray-700 text-gray-500"];
+                    const impactLevel =
+                      pct >= 5   ? "very-high" as const
+                      : pct >= 2 ? "high" as const
+                      : pct >= 0.5 ? "moderate" as const
+                      : "low" as const;
+
+                    const scenarioChipsSlot = !isStablePlan && forecastScenarios.length > 0 ? (
+                      <div className="flex flex-row flex-wrap gap-1.5 px-5 pb-3">
+                        <AnimatePresence initial={false}>
+                          {forecastScenarios.map((s) => (
+                            <motion.div
+                              key={s.id}
+                              layout
+                              initial={{ opacity: 0, scale: 0.85 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.85 }}
+                              transition={{ duration: 0.18, ease: "easeOut" }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
+                              style={{ background: `${s.color}12`, border: `1px solid ${s.color}35`, color: s.color }}>
+                              <span className="inline-flex items-center justify-center rounded-full shrink-0"
+                                style={{ width: 14, height: 14, border: `1px solid currentColor`, opacity: 0.8 }}>
+                                <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                  <polyline points="0,6.5 2,4 4.5,5.5 7,1.5 9,0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </span>
+                              <span className="whitespace-nowrap">{s.label}</span>
+                              <button onClick={() => setForecastScenarios((prev) => prev.filter((x) => x.id !== s.id))}
+                                className="opacity-40 hover:opacity-70 leading-none ml-0.5">✕</button>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    ) : undefined;
 
                     return (
-                      <div
-                        className="mt-4 bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden"
-                        onTouchStart={(e) => { planTouchX.current = e.touches[0].clientX; }}
-                        onTouchEnd={(e) => {
-                          const dx = e.changedTouches[0].clientX - planTouchX.current;
-                          if (Math.abs(dx) > 48) {
-                            if (dx < 0) { planDir.current = 1; setCurrentPlanIndex((i) => Math.min(plans.length - 1, i + 1)); }
-                            else { planDir.current = -1; setCurrentPlanIndex((i) => Math.max(0, i - 1)); }
-                          }
-                        }}
-                      >
-
-                        {/* ── Plan label + impact badge + dot pagination ── */}
-                        <div className="flex items-center justify-between px-5 pt-5 pb-1">
-                          <p className="text-xs text-gray-600">Plan</p>
-                          <div className="flex items-center gap-2">
-                            {activePlan && (
-                              <span className={`inline-block text-[10px] font-medium border rounded-full px-2 py-px ${impactBorder}`}>
-                                {impactLabel}
-                              </span>
-                            )}
-                            {plans.length > 1 && (
-                              <div className="flex items-center gap-1.5">
-                                {plans.map((_, i) => (
-                                  <button
-                                    key={i}
-                                    onClick={() => { planDir.current = i > planIdx ? 1 : -1; setCurrentPlanIndex(i); }}
-                                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                                      i === planIdx ? "w-4 bg-white" : "w-1.5 bg-gray-700 hover:bg-gray-500"
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* ── Animated plan content ── */}
-                        <div
-                          key={planIdx}
-                          style={{ animation: `${planDir.current >= 0 ? "plan-slide-from-right" : "plan-slide-from-left"} 0.22s ease-out both` }}
-                        >
-
-                        {/* ── Plan title ── */}
-                        <div className="px-5 pt-1">
-                          <p className="text-base font-semibold text-white leading-tight">
-                            {activePlan ? activePlan.title : "Portfolio forecast"}
-                          </p>
-                        </div>
-
-                        {/* ── Hero impact number ── */}
-                        {activePlan && (
-                          <p className="px-5 pt-2 text-2xl font-bold text-green-400 tracking-tight leading-none">
-                            {activePlan.impact}
-                          </p>
-                        )}
-
-                        {/* ── Detail text ── */}
-                        {activePlan && (
-                          <p className="px-5 pt-2 text-xs text-gray-600 leading-relaxed">{activePlan.detail}</p>
-                        )}
-
-                        {/* ── Legend (Jupiter-style: label above, colored value below) + timeframe ── */}
-                        <div className="flex items-end justify-between px-5 pt-4 pb-2">
-                          <div className="flex gap-5">
-                            {isStablePlan ? (
-                              <>
-                                <div>
-                                  <p className="text-[11px] text-gray-600 mb-0.5">Idle funds</p>
-                                  <p className="text-sm font-semibold text-yellow-400 tabular-nums">{fmtUSD(activePlan?.stableUsd ?? 0)}</p>
-                                </div>
-                                {showOptimized && (
-                                  <div>
-                                    <p className="text-[11px] text-gray-600 mb-0.5">With plan</p>
-                                    <p className="text-sm font-semibold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</p>
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <div>
-                                  <p className="text-[11px] text-gray-600 mb-0.5">Current path</p>
-                                  <p className="text-sm font-semibold text-yellow-400 tabular-nums">+{fmtUSD(gainCurrent)}</p>
-                                </div>
-                                {showOptimized && (
-                                  <div>
-                                    <p className="text-[11px] text-gray-600 mb-0.5">With plan</p>
-                                    <p className="text-sm font-semibold text-green-400 tabular-nums">+{fmtUSD(gainOptimized)}</p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          <div className="flex gap-3 pb-0.5">
-                            {(["1Y","3Y","5Y"] as const).map((tf) => (
-                              <button key={tf} onClick={() => setTimeframe(tf)}
-                                className={`text-xs transition-colors ${timeframe === tf ? "text-white font-medium" : "text-gray-600 hover:text-gray-400"}`}>
-                                {tf}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* ── Scenario chips ── */}
-                        {!isStablePlan && forecastScenarios.length > 0 && (
-                          <div className="flex flex-row flex-wrap gap-1.5 px-5 pb-3">
-                            <AnimatePresence initial={false}>
-                              {forecastScenarios.map((s) => (
-                                <motion.div
-                                  key={s.id}
-                                  layout
-                                  initial={{ opacity: 0, scale: 0.85 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.85 }}
-                                  transition={{ duration: 0.18, ease: "easeOut" }}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
-                                  style={{ background: `${s.color}12`, border: `1px solid ${s.color}35`, color: s.color }}>
-                                  <span className="inline-flex items-center justify-center rounded-full shrink-0"
-                                    style={{ width: 14, height: 14, border: `1px solid currentColor`, opacity: 0.8 }}>
-                                    <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
-                                      <polyline points="0,6.5 2,4 4.5,5.5 7,1.5 9,0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  </span>
-                                  <span className="whitespace-nowrap">{s.label}</span>
-                                  <button onClick={() => setForecastScenarios((prev) => prev.filter((x) => x.id !== s.id))}
-                                    className="opacity-40 hover:opacity-70 leading-none ml-0.5">✕</button>
-                                </motion.div>
-                              ))}
-                            </AnimatePresence>
-                          </div>
-                        )}
-
-                        {/* ── Chart: full-bleed ── */}
-                        <ResponsiveContainer width="100%" height={140}>
-                          <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                            <defs>
-                              <linearGradient id="gradCurrent" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%"   stopColor="#fbbf24" stopOpacity={0.3} />
-                                <stop offset="60%"  stopColor="#fbbf24" stopOpacity={0.05} />
-                                <stop offset="100%" stopColor="#fbbf24" stopOpacity={0} />
-                              </linearGradient>
-                              <linearGradient id="gradOptimized" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%"   stopColor="#4ade80" stopOpacity={0.28} />
-                                <stop offset="60%"  stopColor="#4ade80" stopOpacity={0.05} />
-                                <stop offset="100%" stopColor="#4ade80" stopOpacity={0} />
-                              </linearGradient>
-                              {forecastScenarios.map((s) => (
-                                <linearGradient key={s.id} id={`grad_${s.id}`} x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%"   stopColor={s.color} stopOpacity={0.2} />
-                                  <stop offset="100%" stopColor={s.color} stopOpacity={0} />
-                                </linearGradient>
-                              ))}
-                            </defs>
-                            <CartesianGrid vertical={false} stroke="#161616" strokeDasharray="4 4" />
-                            <XAxis dataKey="m" type="number" domain={[0, totalPoints]}
-                              ticks={ticks} tickFormatter={fmtTick}
-                              tick={{ fill: "#3f3f46", fontSize: 10 }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="left" hide domain={["auto", "auto"]} />
-                            <Tooltip
-                              cursor={{ stroke: "#2d2d2d", strokeWidth: 1, strokeDasharray: "4 2" }}
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null;
-                                return (
-                                  <div style={{ background: "#0a0a0a", border: "1px solid #27272a", borderRadius: 8, fontSize: 11, padding: "8px 12px", minWidth: 160 }}>
-                                    <p style={{ color: "#52525b", marginBottom: 6 }}>{fmtTick(label as number)}</p>
-                                    {payload.map((entry) => {
-                                      const sname = String(entry.dataKey);
-                                      const v = Number(entry.value);
-                                      let label2: string;
-                                      let color: string = String(entry.color ?? "#a1a1aa");
-                                      if (isStablePlan) {
-                                        label2 = sname === "optimized" ? "Deployed" : "Idle";
-                                      } else if (sname === "optimized") {
-                                        label2 = "With plan";
-                                        color = "#4ade80";
-                                      } else if (sname === "current") {
-                                        label2 = "Current path";
-                                        color = "#fbbf24";
-                                      } else if (sname.startsWith("s_")) {
-                                        const sc = forecastScenarios.find((s) => s.id === sname.slice(2));
-                                        label2 = sc?.label ?? sname;
-                                        color = sc?.color ?? color;
-                                      } else {
-                                        label2 = sname;
-                                      }
-                                      return (
-                                        <div key={sname} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0, display: "inline-block" }} />
-                                          <span style={{ color: "#a1a1aa" }}>{label2} : {fmtUSD(v)}</span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              }}
-                            />
-                            <Area yAxisId="left" type="natural" dataKey="current"
-                              stroke="#fbbf24" strokeWidth={2} fill="url(#gradCurrent)"
-                              dot={false} activeDot={{ r: 4, fill: "#fbbf24", stroke: "#0a0a0a", strokeWidth: 1.5 }}
-                              isAnimationActive={false} />
-                            {showOptimized && (
-                              <Area yAxisId="left" type="natural" dataKey="optimized"
-                                stroke="#4ade80" strokeWidth={2.5} fill="url(#gradOptimized)"
-                                dot={false} activeDot={{ r: 4, fill: "#4ade80", stroke: "#0a0a0a", strokeWidth: 1.5 }}
-                                isAnimationActive={false} />
-                            )}
-                            {forecastScenarios.map((s) => (
-                              <Area key={s.id} yAxisId="left" type="natural" dataKey={`s_${s.id}`}
-                                stroke={s.color} strokeWidth={1.5} strokeDasharray="4 2"
-                                fill={`url(#grad_${s.id})`} dot={false} isAnimationActive={false} />
-                            ))}
-                          </AreaChart>
-                        </ResponsiveContainer>
-
-                        {/* ── Attribution + CTA ── */}
-                        <p className="text-[10px] text-gray-700 text-right px-5 pt-1">
-                          DeFiLlama · CoinGecko · Helius · Kamino
-                        </p>
-                        {activePlan && !activePlan.hideCta && (
-                          <div className="px-5 pt-3 pb-5">
-                            <button onClick={activePlan.onCta}
-                              className="w-full bg-white text-black font-semibold py-3.5 rounded-full hover:bg-gray-100 transition-colors text-sm">
-                              Review plan →
-                            </button>
-                          </div>
-                        )}
-                        </div>{/* end animated plan content */}
-                      </div>
+                      <PlanCard
+                        variant="full"
+                        className="mt-4"
+                        title={activePlan ? activePlan.title : "Portfolio forecast"}
+                        impact={activePlan?.impactUsd ? impactLevel : undefined}
+                        impactLabel={activePlan ? activePlan.impact : ""}
+                        detail={activePlan ? activePlan.detail : ""}
+                        currentPathLabel={!isStablePlan ? `+${fmtUSD(gainCurrent)}` : undefined}
+                        withPlanLabel={showOptimized ? `+${fmtUSD(gainOptimized)}` : undefined}
+                        idleFundsLabel={isStablePlan ? fmtUSD(activePlan?.stableUsd ?? 0) : undefined}
+                        timeframe={timeframe}
+                        onTimeframeChange={setTimeframe}
+                        paginationIndex={planIdx}
+                        paginationCount={plans.length}
+                        onPaginationChange={(i) => { planDir.current = i > planIdx ? 1 : -1; setCurrentPlanIndex(i); }}
+                        contentKey={planIdx}
+                        contentAnimation={`${planDir.current >= 0 ? "plan-slide-from-right" : "plan-slide-from-left"} 0.22s ease-out both`}
+                        belowLegend={scenarioChipsSlot}
+                        chartData={chartData}
+                        forecastScenarios={forecastScenarios}
+                        showOptimized={showOptimized}
+                        isStablePlan={isStablePlan}
+                        onCta={activePlan?.onCta}
+                        hideCta={!activePlan || !!activePlan.hideCta}
+                        onSwipeLeft={() => { planDir.current = 1; setCurrentPlanIndex((i) => Math.min(plans.length - 1, i + 1)); }}
+                        onSwipeRight={() => { planDir.current = -1; setCurrentPlanIndex((i) => Math.max(0, i - 1)); }}
+                      />
                     );
               })()}
 
@@ -827,13 +660,15 @@ Risk Score: ${riskScoreCtx}/100 (${riskLabelCtx})
       {/* ── Starter entry — pinned to bottom, thumb-reachable ── */}
       {!connected && !data && !loading && (
         <div className="px-5 pb-5 pt-3 space-y-3 shrink-0">
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            className="w-full"
             onClick={() => setVisible(true)}
-            disabled={connecting}
-            className="w-full bg-white text-black text-sm font-bold py-3.5 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50"
+            loading={connecting}
           >
             {connecting ? "Connecting…" : "Connect Wallet"}
-          </button>
+          </Button>
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-800" />
             <span className="text-xs text-gray-600 shrink-0">or</span>
