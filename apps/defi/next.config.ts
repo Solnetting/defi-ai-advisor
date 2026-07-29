@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
     "@solana/wallet-adapter-react",
     "@solana/wallet-adapter-react-ui",
     "@solana/wallet-adapter-wallets",
+    "@solana/wallet-adapter-walletconnect",
+    "@walletconnect/solana-adapter",
+    "@defi/microinteractions",
   ],
 };
 
