@@ -26,7 +26,13 @@ export default function WalletButton() {
       walletIcon={wallet?.adapter.icon}
       onCopy={() => navigator.clipboard.writeText(publicKey.toBase58())}
       onChangeWallet={() => setVisible(true)}
-      onDisconnect={() => disconnect()}
+      onDisconnect={async () => {
+        await disconnect();
+        // Phantom mobile hangs on reconnect after disconnect() — reload resets adapter state
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          window.location.reload();
+        }
+      }}
     />
   );
 }
